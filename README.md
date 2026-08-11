@@ -3,7 +3,7 @@
 PostMuse is a local-first Chrome extension for preparing content for X. The product and
 architecture specifications live in the separate `docs` repository.
 
-## Phase 7 status
+## Phase 8 store-candidate status
 
 The current implementation contains:
 
@@ -48,12 +48,21 @@ The current implementation contains:
   responses, cancellation, bounded retries, and the same exact-origin permission boundary.
 - Generated image bytes stay in the current UI session as a Blob URL for preview and download;
   object URLs are revoked and history stores metadata only.
+- First-use guidance explains the configure → draft → generate/edit/copy workflow before any
+  content leaves the panel.
+- Settings includes bilingual Privacy & local data controls, redacted diagnostics, saved-key
+  deletion, and a confirmed full local reset.
+- Packaged privacy/support pages, extension icons, permission/CSP snapshots, and build-time secret
+  scans are part of the release candidate.
+- `npm run package:store` creates an audited store ZIP without the X Content Script or localhost
+  origins; the author/development build retains the user-triggered Inline Context feature.
 - Type checking, Biome checks, Vitest, and production builds.
 
 Composer Fill was skipped at its policy gate. Reference images, image editing, account analytics,
 and publishing automation are intentionally not included. Successful real-Provider smoke tests
-require user-owned API keys and remain manual Phase 2/Phase 7 acceptance steps. A live
-English/Chinese x.com smoke test also remains manual after loading the unpacked `dist/` extension.
+require user-owned API keys and remain manual Phase 2/Phase 7 acceptance steps. Clean-profile
+install/upgrade/uninstall and Chrome Web Store Dashboard disclosure checks also remain manual
+release gates. The store ZIP is a candidate, not a published release.
 
 ## Development
 
@@ -64,9 +73,9 @@ npm run dev
 
 `npm run dev` rebuilds the extension into `dist/` when source files change.
 
-X inline context is enabled by default for the author/development build. Build with
-`VITE_X_INLINE_ENABLED=false npm run build` to produce an inert Content Script while keeping the
-Side Panel available. Reassess the X policy release gate before any public store build.
+X inline context is enabled by default for the author/development build. `npm run package:store`
+builds and audits the public candidate profile, removes the X Content Script and localhost origins,
+and writes an ignored ZIP under `release/`.
 
 ## Load in Chrome
 
@@ -82,4 +91,5 @@ Side Panel available. Reassess the X policy release gate before any public store
 npm run check
 ```
 
-This runs TypeScript, Biome lint and formatting checks, Vitest, and the production build.
+This runs TypeScript, Biome lint and formatting checks, Vitest, the development production build,
+and its release audit.

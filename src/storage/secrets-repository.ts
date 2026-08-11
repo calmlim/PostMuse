@@ -81,3 +81,10 @@ export const deleteApiKey = async (profileId: string): Promise<void> => {
     }
   }
 };
+
+export const deleteAllApiKeys = async (): Promise<void> => {
+  await Promise.all([
+    chrome.storage.local.remove(SECRETS_STORAGE_KEY),
+    chrome.storage.session.remove(SECRETS_STORAGE_KEY),
+  ]);
+};

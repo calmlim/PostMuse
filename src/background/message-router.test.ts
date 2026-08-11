@@ -383,6 +383,55 @@ describe("background message router", () => {
     await expect(takePendingXContext()).resolves.toBeUndefined();
   });
 
+  it("deletes saved keys and resets all local PostMuse data from the trusted panel", async () => {
+    const textProfile = { ...createDefaultProviderProfile(), model: "gpt-private" };
+    const imageProfile = createDefaultImageProviderProfile();
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "privacy-text-settings",
+        profile: textProfile,
+        apiKey: "text-private-key",
+      },
+      trustedSender,
+    );
+    await routeExtensionMessage(
+      {
+        type: "settings.saveImageProfile",
+        requestId: "privacy-image-settings",
+        profile: imageProfile,
+        apiKey: "image-private-key",
+      },
+      trustedSender,
+    );
+
+    await expect(
+      routeExtensionMessage(
+        { type: "data.deleteKeys", requestId: "delete-all-keys" },
+        trustedSender,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        activeSecretStatus: { hasKey: false },
+        activeImageSecretStatus: { hasKey: false },
+      },
+    });
+
+    await savePromptTemplate("professional", "Private style", "Private instructions");
+    await expect(
+      routeExtensionMessage({ type: "data.reset", requestId: "reset-data" }, trustedSender),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        settings: { schemaVersion: 2, activeTextProviderProfileId: "default-text-provider" },
+        activeSecretStatus: { hasKey: false },
+        activeImageSecretStatus: { hasKey: false },
+      },
+    });
+    expect(await listHistoryRecords()).toEqual([]);
+  });
+
   it("cancels an active generation request", async () => {
     const profile = { ...createDefaultProviderProfile(), model: "gpt-test" };
     await routeExtensionMessage(

@@ -9,6 +9,8 @@ import { isExtensionRequest } from "./messages";
 describe("extension message validation", () => {
   it("accepts known typed envelopes", () => {
     expect(isExtensionRequest({ type: "settings.get", requestId: "request-1" })).toBe(true);
+    expect(isExtensionRequest({ type: "data.deleteKeys", requestId: "request-data-1" })).toBe(true);
+    expect(isExtensionRequest({ type: "data.reset", requestId: "request-data-2" })).toBe(true);
     expect(
       isExtensionRequest({
         type: "settings.saveProfile",

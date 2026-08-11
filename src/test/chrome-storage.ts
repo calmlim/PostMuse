@@ -5,6 +5,7 @@ export interface StorageAreaMock {
   get: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
+  clear: ReturnType<typeof vi.fn>;
   setAccessLevel: ReturnType<typeof vi.fn>;
 }
 
@@ -14,6 +15,7 @@ export const createStorageAreaMock = (initial: Record<string, unknown> = {}): St
     get: vi.fn(),
     set: vi.fn(),
     remove: vi.fn(),
+    clear: vi.fn(),
     setAccessLevel: vi.fn(),
   };
 
@@ -37,6 +39,9 @@ export const createStorageAreaMock = (initial: Record<string, unknown> = {}): St
     for (const key of typeof keys === "string" ? [keys] : keys) {
       delete area.data[key];
     }
+  });
+  area.clear.mockImplementation(async () => {
+    area.data = {};
   });
   area.setAccessLevel.mockResolvedValue(undefined);
 

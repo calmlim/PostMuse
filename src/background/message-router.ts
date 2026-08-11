@@ -12,7 +12,12 @@ import {
   upsertImageProviderProfile,
   upsertProviderProfile,
 } from "../storage/settings-repository";
-import { getSecretStatus, readApiKey, saveApiKey } from "../storage/secrets-repository";
+import {
+  deleteAllApiKeys,
+  getSecretStatus,
+  readApiKey,
+  saveApiKey,
+} from "../storage/secrets-repository";
 import { loadHistoryEnabled } from "../storage/history-preferences";
 import { saveHistoryRecord } from "../storage/history-repository";
 import { savePendingXContext } from "../storage/pending-context";
@@ -22,6 +27,7 @@ import { runMockConnectionTest } from "./mock-provider-tester";
 import { hasProviderOriginPermission } from "./permissions";
 import { generateText } from "./text-generation";
 import { generateImage } from "./image-generation";
+import { resetPostMuseData } from "../storage/data-reset";
 
 type AnyExtensionResponse = ExtensionResponse<ExtensionResponseMap[keyof ExtensionResponseMap]>;
 const activeGenerationRequests = new Map<string, AbortController>();
@@ -221,6 +227,20 @@ const handleRequest = async (
       await saveApiKey(request.profile.id, apiKey, request.profile.keyPersistence);
     }
 
+    return { ok: true, data: await getSnapshot() };
+  }
+
+  if (request.type === "data.deleteKeys") {
+    await deleteAllApiKeys();
+    return { ok: true, data: await getSnapshot() };
+  }
+
+  if (request.type === "data.reset") {
+    for (const controller of activeGenerationRequests.values()) {
+      controller.abort();
+    }
+    activeGenerationRequests.clear();
+    await resetPostMuseData();
     return { ok: true, data: await getSnapshot() };
   }
 

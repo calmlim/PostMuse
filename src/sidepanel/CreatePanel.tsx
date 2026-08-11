@@ -408,6 +408,33 @@ export function CreatePanel({
         <span>{copy.createBody}</span>
       </section>
 
+      {!isConfigured ? (
+        <section className="onboarding-card" aria-labelledby="onboarding-title">
+          <div>
+            <p>{copy.onboardingBody}</p>
+            <h2 id="onboarding-title">{copy.onboardingTitle}</h2>
+          </div>
+          <ol>
+            <li>
+              <span>1</span>
+              {copy.onboardingStepProvider}
+            </li>
+            <li>
+              <span>2</span>
+              {copy.onboardingStepDraft}
+            </li>
+            <li>
+              <span>3</span>
+              {copy.onboardingStepReview}
+            </li>
+          </ol>
+          <button type="button" className="secondary-button" onClick={onOpenSettings}>
+            <GearSix size={17} weight="duotone" aria-hidden="true" />
+            {copy.onboardingAction}
+          </button>
+        </section>
+      ) : null}
+
       <form className="create-card" onSubmit={generate}>
         <label className="form-field source-field">
           <span>{copy.sourceLabel}</span>
@@ -617,16 +644,6 @@ export function CreatePanel({
             <WarningCircle size={18} weight="fill" aria-hidden="true" />
             <span>{error}</span>
           </div>
-        ) : null}
-
-        {!isConfigured ? (
-          <button type="button" className="setup-callout" onClick={onOpenSettings}>
-            <GearSix size={18} weight="duotone" aria-hidden="true" />
-            <span>
-              <strong>{copy.configureModelTitle}</strong>
-              <small>{copy.configureModelBody}</small>
-            </span>
-          </button>
         ) : null}
 
         <div className="generate-actions">

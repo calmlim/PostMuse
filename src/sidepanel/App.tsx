@@ -24,6 +24,7 @@ export function App() {
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [promptRevision, setPromptRevision] = useState(0);
   const [historyRevision, setHistoryRevision] = useState(0);
+  const [dataRevision, setDataRevision] = useState(0);
   const [historyDraft, setHistoryDraft] = useState<{
     requestId: string;
     input: GenerationInput;
@@ -84,6 +85,15 @@ export function App() {
     setView("create");
   };
 
+  const handleDataReset = () => {
+    setLocale(DEFAULT_LOCALE);
+    setSettingsRevision((revision) => revision + 1);
+    setPromptRevision((revision) => revision + 1);
+    setHistoryRevision((revision) => revision + 1);
+    setHistoryDraft(undefined);
+    setDataRevision((revision) => revision + 1);
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -117,6 +127,7 @@ export function App() {
       <main className="app-main" data-view={view}>
         <div hidden={view !== "create"}>
           <CreatePanel
+            key={dataRevision}
             copy={copy}
             onOpenSettings={() => setView("settings")}
             settingsRevision={settingsRevision}
@@ -137,6 +148,7 @@ export function App() {
         ) : null}
         <div hidden={view !== "prompts"}>
           <PromptsPanel
+            key={dataRevision}
             copy={copy}
             onPromptsChanged={() => setPromptRevision((revision) => revision + 1)}
           />
@@ -145,6 +157,8 @@ export function App() {
           <SettingsPanel
             copy={copy}
             onSettingsChanged={() => setSettingsRevision((revision) => revision + 1)}
+            onDataReset={handleDataReset}
+            historyRevision={historyRevision}
           />
         </div>
       </main>

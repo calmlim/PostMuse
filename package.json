@@ -12,7 +12,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "npm run typecheck && node scripts/build.mjs",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build"
+    "build:store": "npm run typecheck && node scripts/build.mjs --profile store",
+    "audit:release": "node scripts/release-audit.mjs",
+    "audit:store": "node scripts/release-audit.mjs --profile store",
+    "package:store": "npm run build:store && npm run audit:store && node scripts/package-extension.mjs",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build && npm run audit:release"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

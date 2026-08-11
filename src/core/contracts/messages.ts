@@ -19,6 +19,8 @@ export const MESSAGE_TYPES = [
   "text.cancel",
   "image.generate",
   "image.cancel",
+  "data.deleteKeys",
+  "data.reset",
   "inline.bootstrap",
   "inline.generate",
   "inline.cancel",
@@ -46,6 +48,8 @@ export type ExtensionRequest =
   | { type: "text.cancel"; requestId: string; targetRequestId: string }
   | { type: "image.generate"; requestId: string; input: ImageGenerationInput }
   | { type: "image.cancel"; requestId: string; targetRequestId: string }
+  | { type: "data.deleteKeys"; requestId: string }
+  | { type: "data.reset"; requestId: string }
   | { type: "inline.bootstrap"; requestId: string }
   | { type: "inline.generate"; requestId: string; input: GenerationInput }
   | { type: "inline.cancel"; requestId: string; targetRequestId: string }
@@ -98,6 +102,8 @@ export interface ExtensionResponseMap {
   "text.cancel": { cancelled: boolean };
   "image.generate": ImageGenerationResult;
   "image.cancel": { cancelled: boolean };
+  "data.deleteKeys": SettingsSnapshot;
+  "data.reset": SettingsSnapshot;
   "inline.bootstrap": InlineBootstrap;
   "inline.generate": GenerationResult;
   "inline.cancel": { cancelled: boolean };
@@ -117,7 +123,12 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
     return false;
   }
 
-  if (value.type === "settings.get" || value.type === "inline.bootstrap") {
+  if (
+    value.type === "settings.get" ||
+    value.type === "data.deleteKeys" ||
+    value.type === "data.reset" ||
+    value.type === "inline.bootstrap"
+  ) {
     return true;
   }
 

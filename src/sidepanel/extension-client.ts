@@ -17,7 +17,9 @@ type ExtensionRequestInput =
   | { type: "text.generate"; input: GenerationInput }
   | { type: "text.cancel"; targetRequestId: string }
   | { type: "image.generate"; input: ImageGenerationInput }
-  | { type: "image.cancel"; targetRequestId: string };
+  | { type: "image.cancel"; targetRequestId: string }
+  | { type: "data.deleteKeys" }
+  | { type: "data.reset" };
 
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "settings.get" }>,
@@ -48,6 +50,12 @@ export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "image.cancel" }>,
   options?: { requestId?: string },
 ): Promise<ExtensionResponseMap["image.cancel"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "data.deleteKeys" }>,
+): Promise<ExtensionResponseMap["data.deleteKeys"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "data.reset" }>,
+): Promise<ExtensionResponseMap["data.reset"]>;
 export async function sendExtensionRequest(
   request: ExtensionRequestInput,
   options: { requestId?: string } = {},

@@ -26,10 +26,13 @@ import type {
   SettingsSnapshot,
 } from "../core/settings/types";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
+import { PrivacyDataPanel } from "./PrivacyDataPanel";
 
 interface SettingsPanelProps {
   copy: Messages;
   onSettingsChanged?: () => void;
+  onDataReset?: () => void;
+  historyRevision?: number;
 }
 
 type Feedback = { kind: "success" | "error"; message: string } | undefined;
@@ -50,6 +53,11 @@ const getActiveImageProfile = (snapshot: SettingsSnapshot): ImageProviderProfile
     (profile) => profile.id === snapshot.settings.activeImageProviderProfileId,
   ) ?? snapshot.settings.imageProviderProfiles[0];
 
+const normalizeSnapshot = (snapshot: SettingsSnapshot): SettingsSnapshot => ({
+  ...snapshot,
+  activeImageSecretStatus: snapshot.activeImageSecretStatus ?? { hasKey: false },
+});
+
 const getFriendlyError = (error: unknown, copy: Messages): string => {
   if (!(error instanceof Error)) {
     return copy.errorGeneric;
@@ -66,10 +74,16 @@ const getFriendlyError = (error: unknown, copy: Messages): string => {
   return localized[error.name] ?? error.message ?? copy.errorGeneric;
 };
 
-export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
-  const [profile, setProfile] = useState<ProviderProfile>(getActiveProfile(getDefaultSnapshot()));
+export function SettingsPanel({
+  copy,
+  onSettingsChanged,
+  onDataReset,
+  historyRevision,
+}: SettingsPanelProps) {
+  const [snapshot, setSnapshot] = useState<SettingsSnapshot>(getDefaultSnapshot());
+  const [profile, setProfile] = useState<ProviderProfile>(getActiveProfile(snapshot));
   const [imageProfile, setImageProfile] = useState<ImageProviderProfile>(
-    getActiveImageProfile(getDefaultSnapshot()),
+    getActiveImageProfile(snapshot),
   );
   const [secretStatus, setSecretStatus] = useState<SecretStatus>({ hasKey: false });
   const [imageSecretStatus, setImageSecretStatus] = useState<SecretStatus>({ hasKey: false });
@@ -91,10 +105,12 @@ export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
     void sendExtensionRequest({ type: "settings.get" })
       .then((snapshot) => {
         if (active) {
-          setProfile(getActiveProfile(snapshot));
-          setSecretStatus(snapshot.activeSecretStatus);
-          setImageProfile(getActiveImageProfile(snapshot));
-          setImageSecretStatus(snapshot.activeImageSecretStatus ?? { hasKey: false });
+          const normalized = normalizeSnapshot(snapshot);
+          setSnapshot(normalized);
+          setProfile(getActiveProfile(normalized));
+          setSecretStatus(normalized.activeSecretStatus);
+          setImageProfile(getActiveImageProfile(normalized));
+          setImageSecretStatus(normalized.activeImageSecretStatus);
         }
       })
       .catch(() => {
@@ -161,11 +177,13 @@ export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
   };
 
   const applySnapshot = (snapshot: SettingsSnapshot) => {
-    setProfile(getActiveProfile(snapshot));
-    setSecretStatus(snapshot.activeSecretStatus);
+    const normalized = normalizeSnapshot(snapshot);
+    setSnapshot(normalized);
+    setProfile(getActiveProfile(normalized));
+    setSecretStatus(normalized.activeSecretStatus);
     setApiKey("");
-    setImageProfile(getActiveImageProfile(snapshot));
-    setImageSecretStatus(snapshot.activeImageSecretStatus ?? { hasKey: false });
+    setImageProfile(getActiveImageProfile(normalized));
+    setImageSecretStatus(normalized.activeImageSecretStatus);
     setImageApiKey("");
     onSettingsChanged?.();
   };
@@ -600,6 +618,14 @@ export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
         </div>
         <p className="mock-note">{copy.imageSettingsNote}</p>
       </div>
+
+      <PrivacyDataPanel
+        copy={copy}
+        snapshot={snapshot}
+        onSnapshot={applySnapshot}
+        onDataReset={onDataReset}
+        revision={historyRevision}
+      />
     </section>
   );
 }
