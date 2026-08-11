@@ -1,14 +1,16 @@
-import { GearSix, NotePencil, PencilSimple, ShieldCheck, Sparkle } from "@phosphor-icons/react";
+import { GearSix, PencilSimple, ShieldCheck, Sparkle } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { DEFAULT_LOCALE, getMessages, type Locale } from "../i18n";
 import { loadUiLocale, saveUiLocale } from "../storage/locale-storage";
 import { SettingsPanel } from "./SettingsPanel";
+import { CreatePanel } from "./CreatePanel";
 
 const localeOptions: Locale[] = ["en", "zh-CN"];
 
 export function App() {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   const [view, setView] = useState<"create" | "settings">("create");
+  const [settingsRevision, setSettingsRevision] = useState(0);
   const copy = getMessages(locale);
 
   useEffect(() => {
@@ -61,21 +63,19 @@ export function App() {
       </header>
 
       <main className="app-main" data-view={view}>
-        {view === "create" ? (
-          <section className="empty-state" aria-labelledby="empty-state-title">
-            <div className="empty-icon" aria-hidden="true">
-              <NotePencil size={30} weight="duotone" />
-            </div>
-            <h1 id="empty-state-title">{copy.emptyTitle}</h1>
-            <p>{copy.emptyBody}</p>
-            <div className="empty-prompt">
-              <Sparkle size={15} weight="fill" aria-hidden="true" />
-              <span>{copy.emptyAction}</span>
-            </div>
-          </section>
-        ) : (
-          <SettingsPanel copy={copy} />
-        )}
+        <div hidden={view !== "create"}>
+          <CreatePanel
+            copy={copy}
+            onOpenSettings={() => setView("settings")}
+            settingsRevision={settingsRevision}
+          />
+        </div>
+        <div hidden={view !== "settings"}>
+          <SettingsPanel
+            copy={copy}
+            onSettingsChanged={() => setSettingsRevision((revision) => revision + 1)}
+          />
+        </div>
       </main>
 
       <nav className="app-nav" aria-label={copy.primaryNavigation}>

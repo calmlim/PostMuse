@@ -3,7 +3,7 @@
 PostMuse is a local-first Chrome extension for preparing content for X. The product and
 architecture specifications live in the separate `docs` repository.
 
-## Phase 1 status
+## Phase 2 status
 
 The current implementation contains:
 
@@ -18,10 +18,19 @@ The current implementation contains:
 - Exact, user-triggered Provider origin permissions.
 - Quick and Advanced model settings for OpenAI-compatible, Anthropic, Gemini, and xAI.
 - A local-only setup check that sends no Provider request.
+- A default Create workflow for posts, replies, quotes, threads, and Premium long posts.
+- Independent output-language, built-in style, length, audience, goal, and tone controls.
+- Direct BYOK text generation through OpenAI-compatible Chat Completions, Anthropic Messages,
+  Gemini generateContent, and xAI Chat Completions.
+- Structured-output parsing with deterministic repair and an editable raw-text fallback.
+- Editable candidates and threads with character counts and clipboard copy.
+- Local `.txt` and `.md` input with a 1 MiB file limit.
+- Request cancellation, a 60-second timeout, bounded retries, and stable error mapping.
 - Type checking, Biome checks, Vitest, and production builds.
 
-Real Provider calls, X page UI injection, generation, history, and prompt management are
-intentionally not included in Phase 1.
+X page UI injection, history, user-managed prompts, image generation, account analytics, and
+publishing automation are intentionally not included yet. A successful real-Provider smoke test
+requires a user-owned API key and remains a manual Phase 2 acceptance step.
 
 ## Development
 

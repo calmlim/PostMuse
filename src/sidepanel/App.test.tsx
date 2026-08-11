@@ -76,7 +76,7 @@ describe("Side Panel App", () => {
   it("renders English by default", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "Your writing space is ready" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Turn an idea into a post" })).toBeVisible();
     expect(screen.getByRole("group", { name: "Interface language" })).toBeVisible();
   });
 
@@ -85,7 +85,7 @@ describe("Side Panel App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "中文" }));
 
-    expect(screen.getByRole("heading", { name: "你的创作空间已准备好" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "把想法变成推文" })).toBeVisible();
     expect(screen.getByRole("group", { name: "界面语言" })).toBeVisible();
     await waitFor(() =>
       expect(storageSet).toHaveBeenCalledWith({
@@ -99,7 +99,7 @@ describe("Side Panel App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "你的创作空间已准备好" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "把想法变成推文" })).toBeVisible();
   });
 
   it("runs the Phase 1 local setup check in permission-first order", async () => {
@@ -150,7 +150,105 @@ describe("Side Panel App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Test setup" }));
 
     expect(await screen.findByText(/Local setup check passed/)).toBeVisible();
-    expect(order).toEqual(["permission", "settings.saveProfile", "provider.test"]);
+    expect(order).toEqual(["permission", "settings.saveProfile", "provider.test", "settings.get"]);
     expect(permissionsRequest).toHaveBeenCalledWith({ origins: ["https://api.openai.com/*"] });
+  });
+
+  it("generates editable candidates and copies the chosen draft", async () => {
+    const order: string[] = [];
+    const settings = createDefaultSettings();
+    settings.textProviderProfiles[0] = {
+      ...settings.textProviderProfiles[0],
+      model: "gpt-test",
+    };
+    runtimeSendMessage.mockImplementation(async (request: { type: string }) => {
+      order.push(request.type);
+      if (request.type === "settings.get") {
+        return {
+          ok: true,
+          data: {
+            settings,
+            activeSecretStatus: { hasKey: true, persistence: "session" },
+          },
+        };
+      }
+      if (request.type === "text.generate") {
+        return {
+          ok: true,
+          data: {
+            format: "candidates",
+            contentType: "post",
+            candidates: [
+              { id: "candidate-1", text: "First useful draft" },
+              { id: "candidate-2", text: "Second useful draft" },
+              { id: "candidate-3", text: "Third useful draft" },
+            ],
+            warnings: [],
+            provider: "openai-compatible",
+            model: "gpt-test",
+            softCharacterLimit: 280,
+          },
+        };
+      }
+      return { ok: true, data: { cancelled: true } };
+    });
+    permissionsRequest.mockImplementation(async () => {
+      order.push("permission");
+      return true;
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(<App />);
+    await screen.findByText(/Generate sends this draft directly/);
+    fireEvent.change(screen.getByLabelText("Your idea or draft"), {
+      target: { value: "A useful product lesson" },
+    });
+    order.length = 0;
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(await screen.findByRole("heading", { name: "Edit before you publish" })).toBeVisible();
+    expect(order).toEqual(["permission", "text.generate"]);
+    expect(screen.getByLabelText("Candidate 1")).toHaveValue("First useful draft");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Copy" })[0]);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("First useful draft"));
+    expect(screen.getByText("Copied to clipboard.")).toBeVisible();
+  });
+
+  it("reads a local Markdown file into the draft without uploading it", async () => {
+    render(<App />);
+    const file = new File(["Local markdown idea"], "idea.md", { type: "text/markdown" });
+    Object.defineProperty(file, "text", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue("Local markdown idea"),
+    });
+
+    fireEvent.change(screen.getByLabelText("Add .txt or .md"), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Your idea or draft")).toHaveValue("Local markdown idea"),
+    );
+    expect(screen.getByText("idea.md")).toBeVisible();
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "text.generate" }),
+    );
+  });
+
+  it("keeps the draft while the user visits Settings", async () => {
+    render(<App />);
+    const draft = await screen.findByLabelText("Your idea or draft");
+
+    fireEvent.change(draft, { target: { value: "Keep this local draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Connect your model" })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(screen.getByLabelText("Your idea or draft")).toHaveValue("Keep this local draft");
   });
 });

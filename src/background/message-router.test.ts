@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createDefaultProviderProfile } from "../core/settings/defaults";
+import { createGenerationInputFixture } from "../core/generation/fixtures";
 import { createStorageAreaMock, type StorageAreaMock } from "../test/chrome-storage";
 import { routeExtensionMessage } from "./message-router";
 
 let local: StorageAreaMock;
 let session: StorageAreaMock;
 const permissionContains = vi.fn();
+const fetchMock = vi.fn();
 
 const trustedSender = {
   id: "extension-id",
@@ -17,6 +19,8 @@ beforeEach(() => {
   session = createStorageAreaMock();
   permissionContains.mockReset();
   permissionContains.mockResolvedValue(true);
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
 
   vi.stubGlobal("chrome", {
     storage: { local, session },
@@ -117,6 +121,98 @@ describe("background message router", () => {
     expect(response).toMatchObject({
       ok: true,
       data: { mode: "mock", provider: "openai-compatible", model: "gpt-5-mini" },
+    });
+  });
+
+  it("generates through the active Provider without exposing its key", async () => {
+    const profile = { ...createDefaultProviderProfile(), model: "gpt-test" };
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "request-1",
+        profile,
+        apiKey: "sk-router-secret-value",
+      },
+      trustedSender,
+    );
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"candidates":[{"text":"First"},{"text":"Second"},{"text":"Third"}]}',
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const response = await routeExtensionMessage(
+      {
+        type: "text.generate",
+        requestId: "generation-1",
+        input: createGenerationInputFixture(),
+      },
+      trustedSender,
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: {
+        format: "candidates",
+        candidates: [{ text: "First" }, { text: "Second" }, { text: "Third" }],
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("sk-router-secret-value");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels an active generation request", async () => {
+    const profile = { ...createDefaultProviderProfile(), model: "gpt-test" };
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "request-1",
+        profile,
+        apiKey: "sk-cancel-test-value",
+      },
+      trustedSender,
+    );
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    );
+
+    const pendingGeneration = routeExtensionMessage(
+      {
+        type: "text.generate",
+        requestId: "generation-to-cancel",
+        input: createGenerationInputFixture(),
+      },
+      trustedSender,
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await expect(
+      routeExtensionMessage(
+        {
+          type: "text.cancel",
+          requestId: "cancel-1",
+          targetRequestId: "generation-to-cancel",
+        },
+        trustedSender,
+      ),
+    ).resolves.toEqual({ ok: true, data: { cancelled: true } });
+    await expect(pendingGeneration).resolves.toMatchObject({
+      ok: false,
+      error: { code: "REQUEST_CANCELLED" },
     });
   });
 });

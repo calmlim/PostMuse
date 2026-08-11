@@ -5,11 +5,14 @@ import {
 } from "../core/contracts/messages";
 import { getOriginPattern } from "../core/settings/provider-catalog";
 import type { ProviderProfile } from "../core/settings/types";
+import type { GenerationInput } from "../core/generation/types";
 
 type ExtensionRequestInput =
   | { type: "settings.get" }
   | { type: "settings.saveProfile"; profile: ProviderProfile; apiKey?: string }
-  | { type: "provider.test"; profileId: string };
+  | { type: "provider.test"; profileId: string }
+  | { type: "text.generate"; input: GenerationInput }
+  | { type: "text.cancel"; targetRequestId: string };
 
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "settings.get" }>,
@@ -19,9 +22,19 @@ export function sendExtensionRequest(
 ): Promise<ExtensionResponseMap["settings.saveProfile"]>;
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "provider.test" }>,
+  options?: { requestId?: string },
 ): Promise<ExtensionResponseMap["provider.test"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "text.generate" }>,
+  options?: { requestId?: string },
+): Promise<ExtensionResponseMap["text.generate"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "text.cancel" }>,
+  options?: { requestId?: string },
+): Promise<ExtensionResponseMap["text.cancel"]>;
 export async function sendExtensionRequest(
   request: ExtensionRequestInput,
+  options: { requestId?: string } = {},
 ): Promise<ExtensionResponseMap[keyof ExtensionResponseMap]> {
   if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
     throw new Error("Extension runtime is unavailable.");
@@ -29,7 +42,7 @@ export async function sendExtensionRequest(
 
   const response = (await chrome.runtime.sendMessage({
     ...request,
-    requestId: createRequestId(),
+    requestId: options.requestId ?? createRequestId(),
   })) as ExtensionResponse<ExtensionResponseMap[keyof ExtensionResponseMap]>;
 
   if (!response?.ok) {

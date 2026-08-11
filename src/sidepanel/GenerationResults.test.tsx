@@ -1,0 +1,73 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { getMessages } from "../i18n";
+import { GenerationResults } from "./GenerationResults";
+
+describe("GenerationResults", () => {
+  it("edits thread posts independently and copies the whole thread in order", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const onChange = vi.fn();
+    const result = {
+      format: "thread" as const,
+      contentType: "thread" as const,
+      threads: [
+        {
+          id: "thread-1",
+          posts: [
+            { id: "post-1", text: "Hook" },
+            { id: "post-2", text: "Close" },
+          ],
+        },
+      ],
+      warnings: [],
+      provider: "xai" as const,
+      model: "grok-test",
+      softCharacterLimit: 280,
+    };
+
+    render(<GenerationResults copy={getMessages("en")} result={result} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Post 1 of 2"), { target: { value: "New hook" } });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threads: [
+          expect.objectContaining({
+            posts: [
+              { id: "post-1", text: "New hook" },
+              { id: "post-2", text: "Close" },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy entire thread" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Hook\n\nClose"));
+  });
+
+  it("renders unsafe Provider strings only as editable text", () => {
+    render(
+      <GenerationResults
+        copy={getMessages("en")}
+        result={{
+          format: "raw",
+          contentType: "post",
+          rawText: '<script>globalThis.compromised = true</script><img src=x onerror="bad()">',
+          warnings: ["RAW_TEXT_FALLBACK"],
+          provider: "gemini",
+          model: "gemini-test",
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Raw Provider result")).toHaveValue(
+      '<script>globalThis.compromised = true</script><img src=x onerror="bad()">',
+    );
+    expect(document.querySelector("img")).toBeNull();
+    expect(document.querySelector("script")).toBeNull();
+  });
+});

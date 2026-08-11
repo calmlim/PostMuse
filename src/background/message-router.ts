@@ -13,8 +13,10 @@ import {
 import { getSecretStatus, readApiKey, saveApiKey } from "../storage/secrets-repository";
 import { runMockConnectionTest } from "./mock-provider-tester";
 import { hasProviderOriginPermission } from "./permissions";
+import { generateText } from "./text-generation";
 
 type AnyExtensionResponse = ExtensionResponse<ExtensionResponseMap[keyof ExtensionResponseMap]>;
+const activeGenerationRequests = new Map<string, AbortController>();
 
 export const isTrustedExtensionSender = (sender: chrome.runtime.MessageSender): boolean => {
   const extensionRoot = chrome.runtime.getURL("");
@@ -61,6 +63,39 @@ const handleRequest = async (request: ExtensionRequest): Promise<AnyExtensionRes
     }
 
     return { ok: true, data: await getSnapshot() };
+  }
+
+  if (request.type === "text.cancel") {
+    const controller = activeGenerationRequests.get(request.targetRequestId);
+    controller?.abort();
+    return { ok: true, data: { cancelled: controller !== undefined } };
+  }
+
+  if (request.type === "text.generate") {
+    if (activeGenerationRequests.has(request.requestId)) {
+      throw new AppError("INVALID_REQUEST", "A request with this id is already running.");
+    }
+
+    const controller = new AbortController();
+    activeGenerationRequests.set(request.requestId, controller);
+    try {
+      const settings = await loadSettings();
+      const profile = getActiveProviderProfile(settings);
+      if (!(await hasProviderOriginPermission(profile.baseUrl))) {
+        throw new AppError(
+          "HOST_PERMISSION_REQUIRED",
+          "Allow access to the Provider host before generating.",
+        );
+      }
+
+      const apiKey = await readApiKey(profile.id, profile.keyPersistence);
+      return {
+        ok: true,
+        data: await generateText(request.input, profile, apiKey, controller.signal),
+      };
+    } finally {
+      activeGenerationRequests.delete(request.requestId);
+    }
   }
 
   const settings = await loadSettings();

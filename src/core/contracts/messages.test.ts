@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultProviderProfile } from "../settings/defaults";
+import { createGenerationInputFixture } from "../generation/fixtures";
 import { isExtensionRequest } from "./messages";
 
 describe("extension message validation", () => {
@@ -11,6 +12,13 @@ describe("extension message validation", () => {
         requestId: "request-2",
         profile: createDefaultProviderProfile(),
         apiKey: "sk-test",
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionRequest({
+        type: "text.generate",
+        requestId: "request-3",
+        input: createGenerationInputFixture(),
       }),
     ).toBe(true);
   });
@@ -26,6 +34,13 @@ describe("extension message validation", () => {
         requestId: "request-2",
         profile: createDefaultProviderProfile(),
         apiKey: "x".repeat(2049),
+      }),
+    ).toBe(false);
+    expect(
+      isExtensionRequest({
+        type: "text.cancel",
+        requestId: "request-4",
+        targetRequestId: "",
       }),
     ).toBe(false);
   });

@@ -1,7 +1,15 @@
 import type { MockConnectionResult, ProviderProfile, SettingsSnapshot } from "../settings/types";
 import { isProviderProfile, isRecordValue } from "../settings/validation";
+import type { GenerationInput, GenerationResult } from "../generation/types";
+import { isGenerationInput } from "../generation/validation";
 
-export const MESSAGE_TYPES = ["settings.get", "settings.saveProfile", "provider.test"] as const;
+export const MESSAGE_TYPES = [
+  "settings.get",
+  "settings.saveProfile",
+  "provider.test",
+  "text.generate",
+  "text.cancel",
+] as const;
 
 export type MessageType = (typeof MESSAGE_TYPES)[number];
 
@@ -13,7 +21,9 @@ export type ExtensionRequest =
       profile: ProviderProfile;
       apiKey?: string;
     }
-  | { type: "provider.test"; requestId: string; profileId: string };
+  | { type: "provider.test"; requestId: string; profileId: string }
+  | { type: "text.generate"; requestId: string; input: GenerationInput }
+  | { type: "text.cancel"; requestId: string; targetRequestId: string };
 
 export interface ExtensionError {
   code: ExtensionErrorCode;
@@ -28,6 +38,18 @@ export type ExtensionErrorCode =
   | "API_KEY_REENTRY_REQUIRED"
   | "MODEL_REQUIRED"
   | "HOST_PERMISSION_REQUIRED"
+  | "AUTH_INVALID"
+  | "MODEL_FORBIDDEN"
+  | "MODEL_NOT_FOUND"
+  | "ENDPOINT_NOT_FOUND"
+  | "PROVIDER_REQUEST_INVALID"
+  | "RATE_LIMITED"
+  | "PROVIDER_UNAVAILABLE"
+  | "TIMEOUT"
+  | "NETWORK_ERROR"
+  | "CONTENT_REJECTED"
+  | "OUTPUT_INVALID"
+  | "REQUEST_CANCELLED"
   | "INTERNAL_ERROR";
 
 export type ExtensionResponse<T> = { ok: true; data: T } | { ok: false; error: ExtensionError };
@@ -36,6 +58,8 @@ export interface ExtensionResponseMap {
   "settings.get": SettingsSnapshot;
   "settings.saveProfile": SettingsSnapshot;
   "provider.test": MockConnectionResult;
+  "text.generate": GenerationResult;
+  "text.cancel": { cancelled: boolean };
 }
 
 const hasValidEnvelope = (value: unknown): value is Record<string, unknown> =>
@@ -60,6 +84,18 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
       isProviderProfile(value.profile) &&
       (value.apiKey === undefined ||
         (typeof value.apiKey === "string" && value.apiKey.length <= 2048))
+    );
+  }
+
+  if (value.type === "text.generate") {
+    return isGenerationInput(value.input);
+  }
+
+  if (value.type === "text.cancel") {
+    return (
+      typeof value.targetRequestId === "string" &&
+      value.targetRequestId.length > 0 &&
+      value.targetRequestId.length <= 100
     );
   }
 

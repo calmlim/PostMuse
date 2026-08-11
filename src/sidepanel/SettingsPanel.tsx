@@ -22,6 +22,7 @@ import { requestProviderOriginPermission, sendExtensionRequest } from "./extensi
 
 interface SettingsPanelProps {
   copy: Messages;
+  onSettingsChanged?: () => void;
 }
 
 type Feedback = { kind: "success" | "error"; message: string } | undefined;
@@ -52,7 +53,7 @@ const getFriendlyError = (error: unknown, copy: Messages): string => {
   return localized[error.name] ?? error.message ?? copy.errorGeneric;
 };
 
-export function SettingsPanel({ copy }: SettingsPanelProps) {
+export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
   const [profile, setProfile] = useState<ProviderProfile>(getActiveProfile(getDefaultSnapshot()));
   const [secretStatus, setSecretStatus] = useState<SecretStatus>({ hasKey: false });
   const [apiKey, setApiKey] = useState("");
@@ -110,6 +111,7 @@ export function SettingsPanel({ copy }: SettingsPanelProps) {
     setProfile(getActiveProfile(snapshot));
     setSecretStatus(snapshot.activeSecretStatus);
     setApiKey("");
+    onSettingsChanged?.();
   };
 
   const saveProfile = async () => {
