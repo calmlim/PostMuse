@@ -1,6 +1,7 @@
 import { CONTENT_TYPES, type GenerationInput, type GenerationResult } from "../generation/types";
 import { isGenerationInput } from "../generation/validation";
-import { PROVIDER_IDS } from "../settings/types";
+import { IMAGE_ASPECT_RATIOS, IMAGE_SIZES, type ImageHistoryMetadata } from "../image/types";
+import { IMAGE_PROVIDER_IDS, PROVIDER_IDS } from "../settings/types";
 import { isRecordValue } from "../settings/validation";
 
 export const HISTORY_SCHEMA_VERSION = 1;
@@ -18,6 +19,7 @@ export interface HistoryRecordV1 {
     styleTemplateId: string;
     styleTemplateVersion: number;
   };
+  media?: ImageHistoryMetadata;
 }
 
 const isGeneratedText = (value: unknown): boolean =>
@@ -69,6 +71,21 @@ const isGenerationResult = (value: unknown): value is GenerationResult => {
 const isIsoDate = (value: unknown): value is string =>
   typeof value === "string" && Number.isFinite(Date.parse(value));
 
+const isImageHistoryMetadata = (value: unknown): value is ImageHistoryMetadata =>
+  isRecordValue(value) &&
+  value.type === "image" &&
+  IMAGE_PROVIDER_IDS.some((provider) => provider === value.provider) &&
+  typeof value.model === "string" &&
+  value.model.length > 0 &&
+  typeof value.prompt === "string" &&
+  value.prompt.length > 0 &&
+  IMAGE_ASPECT_RATIOS.some((ratio) => ratio === value.aspectRatio) &&
+  IMAGE_SIZES.some((size) => size === value.size) &&
+  (value.mimeType === "image/png" ||
+    value.mimeType === "image/jpeg" ||
+    value.mimeType === "image/webp") &&
+  isIsoDate(value.generatedAt);
+
 export const isHistoryRecordV1 = (value: unknown): value is HistoryRecordV1 =>
   isRecordValue(value) &&
   value.schemaVersion === HISTORY_SCHEMA_VERSION &&
@@ -86,7 +103,8 @@ export const isHistoryRecordV1 = (value: unknown): value is HistoryRecordV1 =>
   value.prompt.styleTemplateId === value.input.styleId &&
   typeof value.prompt.styleTemplateVersion === "number" &&
   Number.isInteger(value.prompt.styleTemplateVersion) &&
-  value.prompt.styleTemplateVersion >= 1;
+  value.prompt.styleTemplateVersion >= 1 &&
+  (value.media === undefined || isImageHistoryMetadata(value.media));
 
 export const getHistoryResultText = (result: GenerationResult): string => {
   if (result.format === "candidates") {

@@ -6,8 +6,10 @@ import type {
 import { isExtensionRequest } from "../core/contracts/messages";
 import { AppError, toExtensionError } from "../core/errors/app-error";
 import {
+  getActiveImageProviderProfile,
   getActiveProviderProfile,
   loadSettings,
+  upsertImageProviderProfile,
   upsertProviderProfile,
 } from "../storage/settings-repository";
 import { getSecretStatus, readApiKey, saveApiKey } from "../storage/secrets-repository";
@@ -19,6 +21,7 @@ import { PROMPT_RECIPE_VERSION } from "../core/prompts/prompt-builder";
 import { runMockConnectionTest } from "./mock-provider-tester";
 import { hasProviderOriginPermission } from "./permissions";
 import { generateText } from "./text-generation";
+import { generateImage } from "./image-generation";
 
 type AnyExtensionResponse = ExtensionResponse<ExtensionResponseMap[keyof ExtensionResponseMap]>;
 const activeGenerationRequests = new Map<string, AbortController>();
@@ -53,9 +56,11 @@ const isInlineMessage = (value: unknown): boolean =>
 const getSnapshot = async () => {
   const settings = await loadSettings();
   const profile = getActiveProviderProfile(settings);
+  const imageProfile = getActiveImageProviderProfile(settings);
   return {
     settings,
     activeSecretStatus: await getSecretStatus(profile.id),
+    activeImageSecretStatus: await getSecretStatus(imageProfile.id),
   };
 };
 
@@ -96,6 +101,35 @@ const runGeneration = async (
       }
     }
     return { ok: true, data: result };
+  } finally {
+    activeGenerationRequests.delete(requestId);
+  }
+};
+
+const runImageGeneration = async (
+  requestId: string,
+  input: Extract<ExtensionRequest, { type: "image.generate" }>["input"],
+): Promise<AnyExtensionResponse> => {
+  if (activeGenerationRequests.has(requestId)) {
+    throw new AppError("INVALID_REQUEST", "A request with this id is already running.");
+  }
+
+  const controller = new AbortController();
+  activeGenerationRequests.set(requestId, controller);
+  try {
+    const settings = await loadSettings();
+    const profile = getActiveImageProviderProfile(settings);
+    if (!(await hasProviderOriginPermission(profile.baseUrl))) {
+      throw new AppError(
+        "HOST_PERMISSION_REQUIRED",
+        "Allow access to the image Provider host before generating.",
+      );
+    }
+    const apiKey = await readApiKey(profile.id, profile.keyPersistence);
+    return {
+      ok: true,
+      data: await generateImage(input, profile, apiKey, controller.signal),
+    };
   } finally {
     activeGenerationRequests.delete(requestId);
   }
@@ -167,7 +201,34 @@ const handleRequest = async (
     return { ok: true, data: await getSnapshot() };
   }
 
-  if (request.type === "text.cancel" || request.type === "inline.cancel") {
+  if (request.type === "settings.saveImageProfile") {
+    const currentStatus = await getSecretStatus(request.profile.id);
+    const apiKey = request.apiKey?.trim();
+
+    if (
+      currentStatus.hasKey &&
+      currentStatus.persistence !== request.profile.keyPersistence &&
+      !apiKey
+    ) {
+      throw new AppError(
+        "API_KEY_REENTRY_REQUIRED",
+        "Re-enter the API key when changing how it is stored.",
+      );
+    }
+
+    await upsertImageProviderProfile(request.profile);
+    if (apiKey) {
+      await saveApiKey(request.profile.id, apiKey, request.profile.keyPersistence);
+    }
+
+    return { ok: true, data: await getSnapshot() };
+  }
+
+  if (
+    request.type === "text.cancel" ||
+    request.type === "image.cancel" ||
+    request.type === "inline.cancel"
+  ) {
     const controller = activeGenerationRequests.get(request.targetRequestId);
     controller?.abort();
     return { ok: true, data: { cancelled: controller !== undefined } };
@@ -175,6 +236,10 @@ const handleRequest = async (
 
   if (request.type === "text.generate" || request.type === "inline.generate") {
     return runGeneration(request.requestId, request.input, request.type === "inline.generate");
+  }
+
+  if (request.type === "image.generate") {
+    return runImageGeneration(request.requestId, request.input);
   }
 
   const settings = await loadSettings();

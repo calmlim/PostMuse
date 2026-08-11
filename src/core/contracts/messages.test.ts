@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderProfile } from "../settings/defaults";
+import {
+  createDefaultImageProviderProfile,
+  createDefaultProviderProfile,
+} from "../settings/defaults";
 import { createGenerationInputFixture } from "../generation/fixtures";
 import { isExtensionRequest } from "./messages";
 
@@ -12,6 +15,28 @@ describe("extension message validation", () => {
         requestId: "request-2",
         profile: createDefaultProviderProfile(),
         apiKey: "sk-test",
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionRequest({
+        type: "settings.saveImageProfile",
+        requestId: "request-image-settings",
+        profile: createDefaultImageProviderProfile(),
+        apiKey: "image-test-key",
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionRequest({
+        type: "image.generate",
+        requestId: "request-image",
+        input: {
+          sourceText: "A product lesson",
+          prompt: "A clean illustration",
+          style: "illustration",
+          aspectRatio: "1:1",
+          size: "1K",
+          includeText: false,
+        },
       }),
     ).toBe(true);
     expect(
@@ -48,6 +73,13 @@ describe("extension message validation", () => {
         type: "text.cancel",
         requestId: "request-4",
         targetRequestId: "",
+      }),
+    ).toBe(false);
+    expect(
+      isExtensionRequest({
+        type: "image.generate",
+        requestId: "request-image",
+        input: { prompt: "missing fields" },
       }),
     ).toBe(false);
   });

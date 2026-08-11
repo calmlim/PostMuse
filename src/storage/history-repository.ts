@@ -1,4 +1,5 @@
 import type { GenerationInput, GenerationResult } from "../core/generation/types";
+import type { ImageHistoryMetadata } from "../core/image/types";
 import {
   HISTORY_LIMIT,
   HISTORY_SCHEMA_VERSION,
@@ -126,6 +127,37 @@ export const updateHistoryResult = async (
     if (!isHistoryRecordV1(updated)) {
       transaction.abort();
       throw new Error("History update failed validation.");
+    }
+    store.put(updated);
+    await transactionToPromise(transaction);
+    return updated;
+  } finally {
+    database.close();
+  }
+};
+
+export const updateHistoryMedia = async (
+  historyId: string,
+  media: ImageHistoryMetadata,
+  now: Date = new Date(),
+): Promise<HistoryRecordV1> => {
+  const database = await openHistoryDatabase();
+  try {
+    const transaction = database.transaction(HISTORY_STORE_NAME, "readwrite");
+    const store = transaction.objectStore(HISTORY_STORE_NAME);
+    const current = await requestToPromise(store.get(historyId));
+    if (!isHistoryRecordV1(current)) {
+      transaction.abort();
+      throw new Error("History record was not found.");
+    }
+    const updated: HistoryRecordV1 = {
+      ...current,
+      media,
+      updatedAt: now.toISOString(),
+    };
+    if (!isHistoryRecordV1(updated)) {
+      transaction.abort();
+      throw new Error("History media update failed validation.");
     }
     store.put(updated);
     await transactionToPromise(transaction);

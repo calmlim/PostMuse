@@ -3,7 +3,7 @@
 PostMuse is a local-first Chrome extension for preparing content for X. The product and
 architecture specifications live in the separate `docs` repository.
 
-## Phase 5 status
+## Phase 7 status
 
 The current implementation contains:
 
@@ -40,12 +40,20 @@ The current implementation contains:
 - X DOM observation is batched and idempotent, with cleanup for virtual-list node removal.
 - Content-script messages are limited to inline bootstrap/generation/cancel/open operations;
   Provider keys stay in trusted extension contexts.
+- Settings schema v2 keeps image Provider profiles and secrets separate from text generation while
+  migrating existing schema v1 settings without losing the active text profile.
+- Editable image prompts can be created from a candidate, one Thread post, or raw fallback text,
+  with visual style, aspect ratio, resolution, and optional in-image text controls.
+- Direct BYOK image generation uses OpenAI Images and Gemini Interactions adapters with one-image
+  responses, cancellation, bounded retries, and the same exact-origin permission boundary.
+- Generated image bytes stay in the current UI session as a Blob URL for preview and download;
+  object URLs are revoked and history stores metadata only.
 - Type checking, Biome checks, Vitest, and production builds.
 
-Composer Fill, image generation, account analytics, and publishing automation are intentionally not
-included yet. A successful real-Provider smoke test requires a user-owned API key and remains a
-manual Phase 2 acceptance step. A live English/Chinese x.com smoke test also remains manual after
-loading the unpacked `dist/` extension.
+Composer Fill was skipped at its policy gate. Reference images, image editing, account analytics,
+and publishing automation are intentionally not included. Successful real-Provider smoke tests
+require user-owned API keys and remain manual Phase 2/Phase 7 acceptance steps. A live
+English/Chinese x.com smoke test also remains manual after loading the unpacked `dist/` extension.
 
 ## Development
 

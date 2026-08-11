@@ -6,13 +6,18 @@ import {
 import { getOriginPattern } from "../core/settings/provider-catalog";
 import type { ProviderProfile } from "../core/settings/types";
 import type { GenerationInput } from "../core/generation/types";
+import type { ImageGenerationInput } from "../core/image/types";
+import type { ImageProviderProfile } from "../core/settings/types";
 
 type ExtensionRequestInput =
   | { type: "settings.get" }
   | { type: "settings.saveProfile"; profile: ProviderProfile; apiKey?: string }
+  | { type: "settings.saveImageProfile"; profile: ImageProviderProfile; apiKey?: string }
   | { type: "provider.test"; profileId: string }
   | { type: "text.generate"; input: GenerationInput }
-  | { type: "text.cancel"; targetRequestId: string };
+  | { type: "text.cancel"; targetRequestId: string }
+  | { type: "image.generate"; input: ImageGenerationInput }
+  | { type: "image.cancel"; targetRequestId: string };
 
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "settings.get" }>,
@@ -20,6 +25,9 @@ export function sendExtensionRequest(
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "settings.saveProfile" }>,
 ): Promise<ExtensionResponseMap["settings.saveProfile"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "settings.saveImageProfile" }>,
+): Promise<ExtensionResponseMap["settings.saveImageProfile"]>;
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "provider.test" }>,
   options?: { requestId?: string },
@@ -32,6 +40,14 @@ export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "text.cancel" }>,
   options?: { requestId?: string },
 ): Promise<ExtensionResponseMap["text.cancel"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "image.generate" }>,
+  options?: { requestId?: string },
+): Promise<ExtensionResponseMap["image.generate"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "image.cancel" }>,
+  options?: { requestId?: string },
+): Promise<ExtensionResponseMap["image.cancel"]>;
 export async function sendExtensionRequest(
   request: ExtensionRequestInput,
   options: { requestId?: string } = {},

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createDefaultProviderProfile } from "../core/settings/defaults";
+import {
+  createDefaultImageProviderProfile,
+  createDefaultProviderProfile,
+} from "../core/settings/defaults";
 import { createGenerationInputFixture } from "../core/generation/fixtures";
 import { createStorageAreaMock, type StorageAreaMock } from "../test/chrome-storage";
 import { routeExtensionMessage } from "./message-router";
@@ -258,6 +261,109 @@ describe("background message router", () => {
     expect(await listHistoryRecords()).toHaveLength(1);
     expect((await listHistoryRecords())[0].input.source.text).toBe("Current visible X post");
     expect(JSON.stringify(response)).not.toContain("sk-inline-secret");
+  });
+
+  it("generates an image through the separately configured image Provider", async () => {
+    const profile = createDefaultImageProviderProfile();
+    await routeExtensionMessage(
+      {
+        type: "settings.saveImageProfile",
+        requestId: "image-settings",
+        profile,
+        apiKey: "image-router-secret",
+      },
+      trustedSender,
+    );
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ b64_json: "aW1hZ2UtYnl0ZXM=" }] }), {
+        status: 200,
+      }),
+    );
+
+    const response = await routeExtensionMessage(
+      {
+        type: "image.generate",
+        requestId: "image-generation",
+        input: {
+          sourceText: "A useful product lesson",
+          prompt: "A clean editorial illustration",
+          style: "editorial",
+          aspectRatio: "1:1",
+          size: "1K",
+          includeText: false,
+        },
+      },
+      trustedSender,
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: { provider: "openai", mimeType: "image/png", base64Data: "aW1hZ2UtYnl0ZXM=" },
+    });
+    expect(JSON.stringify(response)).not.toContain("image-router-secret");
+    expect(permissionContains).toHaveBeenCalledWith({ origins: ["https://api.openai.com/*"] });
+    await expect(
+      routeExtensionMessage({ type: "settings.get", requestId: "image-snapshot" }, trustedSender),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        activeSecretStatus: { hasKey: false },
+        activeImageSecretStatus: { hasKey: true, persistence: "session" },
+      },
+    });
+  });
+
+  it("cancels an active image generation request", async () => {
+    const profile = createDefaultImageProviderProfile();
+    await routeExtensionMessage(
+      {
+        type: "settings.saveImageProfile",
+        requestId: "image-cancel-settings",
+        profile,
+        apiKey: "image-cancel-secret",
+      },
+      trustedSender,
+    );
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    );
+
+    const pendingGeneration = routeExtensionMessage(
+      {
+        type: "image.generate",
+        requestId: "image-to-cancel",
+        input: {
+          sourceText: "A source",
+          prompt: "A visual",
+          style: "minimal",
+          aspectRatio: "1:1",
+          size: "1K",
+          includeText: false,
+        },
+      },
+      trustedSender,
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await expect(
+      routeExtensionMessage(
+        {
+          type: "image.cancel",
+          requestId: "cancel-image",
+          targetRequestId: "image-to-cancel",
+        },
+        trustedSender,
+      ),
+    ).resolves.toEqual({ ok: true, data: { cancelled: true } });
+    await expect(pendingGeneration).resolves.toMatchObject({
+      ok: false,
+      error: { code: "REQUEST_CANCELLED" },
+    });
   });
 
   it("hands one validated input to the side panel for the current X tab", async () => {

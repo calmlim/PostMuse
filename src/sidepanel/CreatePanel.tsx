@@ -16,6 +16,7 @@ import type {
   OutputLength,
   SourceKind,
 } from "../core/generation/types";
+import type { ImageHistoryMetadata } from "../core/image/types";
 import { MAX_FILE_BYTES } from "../core/generation/validation";
 import {
   createDefaultPromptLibrary,
@@ -27,7 +28,7 @@ import type { ProviderProfile, SettingsSnapshot } from "../core/settings/types";
 import type { Messages } from "../i18n";
 import { loadCreateAdvancedOpen, saveCreateAdvancedOpen } from "../storage/create-ui-preferences";
 import { loadHistoryEnabled } from "../storage/history-preferences";
-import { saveHistoryRecord } from "../storage/history-repository";
+import { saveHistoryRecord, updateHistoryMedia } from "../storage/history-repository";
 import { loadResolvedPromptLibrary } from "../storage/prompt-repository";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
 import { GenerationResults } from "./GenerationResults";
@@ -130,6 +131,7 @@ export function CreatePanel({
   const [historyEnabled, setHistoryEnabled] = useState(true);
   const [rawHistorySaved, setRawHistorySaved] = useState(false);
   const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
+  const [lastHistoryId, setLastHistoryId] = useState<string>();
   const activeRequestId = useRef<string | undefined>(undefined);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revisions are explicit reload signals.
@@ -192,6 +194,7 @@ export function CreatePanel({
     });
     setResult(undefined);
     setLastGenerationInput(undefined);
+    setLastHistoryId(undefined);
     setRawHistorySaved(false);
     setError(undefined);
     setFileName(undefined);
@@ -294,6 +297,7 @@ export function CreatePanel({
 
     setIsGenerating(true);
     setError(undefined);
+    setLastHistoryId(undefined);
     const requestId = createRequestId();
     activeRequestId.current = requestId;
 
@@ -317,11 +321,12 @@ export function CreatePanel({
         setRawHistorySaved(false);
         if (historyEnabled && generationResult.format !== "raw") {
           try {
-            await saveHistoryRecord(generationInput, generationResult, {
+            const historyRecord = await saveHistoryRecord(generationInput, generationResult, {
               recipeVersion: PROMPT_RECIPE_VERSION,
               styleTemplateVersion:
                 styles.find((style) => style.id === generationInput.styleId)?.version ?? 1,
             });
+            setLastHistoryId(historyRecord.id);
             onHistoryChanged();
           } catch {
             setError(copy.historySaveError);
@@ -345,13 +350,26 @@ export function CreatePanel({
       return;
     }
     try {
-      await saveHistoryRecord(lastGenerationInput, result, {
+      const historyRecord = await saveHistoryRecord(lastGenerationInput, result, {
         recipeVersion: PROMPT_RECIPE_VERSION,
         styleTemplateVersion:
           styles.find((style) => style.id === lastGenerationInput.styleId)?.version ?? 1,
       });
+      setLastHistoryId(historyRecord.id);
       setRawHistorySaved(true);
       setError(undefined);
+      onHistoryChanged();
+    } catch {
+      setError(copy.historySaveError);
+    }
+  };
+
+  const saveImageMetadata = async (metadata: ImageHistoryMetadata) => {
+    if (!lastHistoryId) {
+      return;
+    }
+    try {
+      await updateHistoryMedia(lastHistoryId, metadata);
       onHistoryChanged();
     } catch {
       setError(copy.historySaveError);
@@ -639,6 +657,9 @@ export function CreatePanel({
           onChange={setResult}
           onSaveRaw={historyEnabled && result.format === "raw" ? saveRawResult : undefined}
           rawHistorySaved={rawHistorySaved}
+          settingsSnapshot={snapshot}
+          onOpenSettings={onOpenSettings}
+          onImageGenerated={saveImageMetadata}
         />
       ) : null}
     </div>

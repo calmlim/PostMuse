@@ -1,9 +1,16 @@
-import { PROVIDER_IDS, type ProviderId } from "./types";
+import { IMAGE_PROVIDER_IDS, PROVIDER_IDS, type ImageProviderId, type ProviderId } from "./types";
 
 export interface ProviderDefinition {
   id: ProviderId;
   label: string;
   defaultBaseUrl: string;
+}
+
+export interface ImageProviderDefinition {
+  id: ImageProviderId;
+  label: string;
+  defaultBaseUrl: string;
+  defaultModel: string;
 }
 
 export const PROVIDER_DEFINITIONS: Record<ProviderId, ProviderDefinition> = {
@@ -29,8 +36,26 @@ export const PROVIDER_DEFINITIONS: Record<ProviderId, ProviderDefinition> = {
   },
 };
 
+export const IMAGE_PROVIDER_DEFINITIONS: Record<ImageProviderId, ImageProviderDefinition> = {
+  openai: {
+    id: "openai",
+    label: "OpenAI Images",
+    defaultBaseUrl: "https://api.openai.com",
+    defaultModel: "gpt-image-2",
+  },
+  gemini: {
+    id: "gemini",
+    label: "Gemini Images",
+    defaultBaseUrl: "https://generativelanguage.googleapis.com",
+    defaultModel: "gemini-3.1-flash-image",
+  },
+};
+
 export const isProviderId = (value: unknown): value is ProviderId =>
   typeof value === "string" && PROVIDER_IDS.some((providerId) => providerId === value);
+
+export const isImageProviderId = (value: unknown): value is ImageProviderId =>
+  typeof value === "string" && IMAGE_PROVIDER_IDS.some((providerId) => providerId === value);
 
 export const normalizeBaseUrl = (
   value: string,

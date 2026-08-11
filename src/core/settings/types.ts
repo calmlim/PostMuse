@@ -1,8 +1,10 @@
 import type { Locale } from "../../i18n";
 
 export const PROVIDER_IDS = ["openai-compatible", "anthropic", "gemini", "xai"] as const;
+export const IMAGE_PROVIDER_IDS = ["openai", "gemini"] as const;
 
 export type ProviderId = (typeof PROVIDER_IDS)[number];
+export type ImageProviderId = (typeof IMAGE_PROVIDER_IDS)[number];
 export type SecretPersistence = "session" | "local";
 
 export interface ProviderProfile {
@@ -16,11 +18,22 @@ export interface ProviderProfile {
   keyPersistence: SecretPersistence;
 }
 
-export interface SettingsV1 {
-  schemaVersion: 1;
+export interface ImageProviderProfile {
+  id: string;
+  displayName: string;
+  provider: ImageProviderId;
+  model: string;
+  baseUrl: string;
+  keyPersistence: SecretPersistence;
+}
+
+export interface SettingsV2 {
+  schemaVersion: 2;
   uiLocale: Locale;
   activeTextProviderProfileId: string;
   textProviderProfiles: ProviderProfile[];
+  activeImageProviderProfileId: string;
+  imageProviderProfiles: ImageProviderProfile[];
 }
 
 export interface SecretStatus {
@@ -29,8 +42,9 @@ export interface SecretStatus {
 }
 
 export interface SettingsSnapshot {
-  settings: SettingsV1;
+  settings: SettingsV2;
   activeSecretStatus: SecretStatus;
+  activeImageSecretStatus: SecretStatus;
 }
 
 export interface MockConnectionResult {

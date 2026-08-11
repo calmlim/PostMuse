@@ -4,6 +4,7 @@ import {
   Eye,
   EyeSlash,
   FloppyDisk,
+  ImageSquare,
   Key,
   Plug,
   WarningCircle,
@@ -11,8 +12,14 @@ import {
 import { useEffect, useState } from "react";
 import type { Messages } from "../i18n";
 import { createDefaultSettings } from "../core/settings/defaults";
-import { normalizeBaseUrl, PROVIDER_DEFINITIONS } from "../core/settings/provider-catalog";
+import {
+  IMAGE_PROVIDER_DEFINITIONS,
+  normalizeBaseUrl,
+  PROVIDER_DEFINITIONS,
+} from "../core/settings/provider-catalog";
 import type {
+  ImageProviderId,
+  ImageProviderProfile,
   ProviderId,
   ProviderProfile,
   SecretStatus,
@@ -30,12 +37,18 @@ type Feedback = { kind: "success" | "error"; message: string } | undefined;
 const getDefaultSnapshot = (): SettingsSnapshot => ({
   settings: createDefaultSettings(),
   activeSecretStatus: { hasKey: false },
+  activeImageSecretStatus: { hasKey: false },
 });
 
 const getActiveProfile = (snapshot: SettingsSnapshot): ProviderProfile =>
   snapshot.settings.textProviderProfiles.find(
     (profile) => profile.id === snapshot.settings.activeTextProviderProfileId,
   ) ?? snapshot.settings.textProviderProfiles[0];
+
+const getActiveImageProfile = (snapshot: SettingsSnapshot): ImageProviderProfile =>
+  snapshot.settings.imageProviderProfiles.find(
+    (profile) => profile.id === snapshot.settings.activeImageProviderProfileId,
+  ) ?? snapshot.settings.imageProviderProfiles[0];
 
 const getFriendlyError = (error: unknown, copy: Messages): string => {
   if (!(error instanceof Error)) {
@@ -55,13 +68,22 @@ const getFriendlyError = (error: unknown, copy: Messages): string => {
 
 export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
   const [profile, setProfile] = useState<ProviderProfile>(getActiveProfile(getDefaultSnapshot()));
+  const [imageProfile, setImageProfile] = useState<ImageProviderProfile>(
+    getActiveImageProfile(getDefaultSnapshot()),
+  );
   const [secretStatus, setSecretStatus] = useState<SecretStatus>({ hasKey: false });
+  const [imageSecretStatus, setImageSecretStatus] = useState<SecretStatus>({ hasKey: false });
   const [apiKey, setApiKey] = useState("");
+  const [imageApiKey, setImageApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [showImageKey, setShowImageKey] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [imageAdvancedOpen, setImageAdvancedOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
+  const [isImageBusy, setIsImageBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>();
+  const [imageFeedback, setImageFeedback] = useState<Feedback>();
 
   useEffect(() => {
     let active = true;
@@ -71,6 +93,8 @@ export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
         if (active) {
           setProfile(getActiveProfile(snapshot));
           setSecretStatus(snapshot.activeSecretStatus);
+          setImageProfile(getActiveImageProfile(snapshot));
+          setImageSecretStatus(snapshot.activeImageSecretStatus ?? { hasKey: false });
         }
       })
       .catch(() => {
@@ -107,11 +131,67 @@ export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
     setFeedback(undefined);
   };
 
+  const updateImageProfile = <K extends keyof ImageProviderProfile>(
+    key: K,
+    value: ImageProviderProfile[K],
+  ) => {
+    setImageProfile((current) => ({ ...current, [key]: value }));
+    setImageFeedback(undefined);
+  };
+
+  const selectImageProvider = (provider: ImageProviderId) => {
+    setImageProfile((current) => {
+      const currentDefinition = IMAGE_PROVIDER_DEFINITIONS[current.provider];
+      const nextDefinition = IMAGE_PROVIDER_DEFINITIONS[provider];
+      return {
+        ...current,
+        provider,
+        displayName: nextDefinition.label,
+        model:
+          current.model === currentDefinition.defaultModel
+            ? nextDefinition.defaultModel
+            : current.model,
+        baseUrl:
+          current.baseUrl === currentDefinition.defaultBaseUrl
+            ? nextDefinition.defaultBaseUrl
+            : current.baseUrl,
+      };
+    });
+    setImageFeedback(undefined);
+  };
+
   const applySnapshot = (snapshot: SettingsSnapshot) => {
     setProfile(getActiveProfile(snapshot));
     setSecretStatus(snapshot.activeSecretStatus);
     setApiKey("");
+    setImageProfile(getActiveImageProfile(snapshot));
+    setImageSecretStatus(snapshot.activeImageSecretStatus ?? { hasKey: false });
+    setImageApiKey("");
     onSettingsChanged?.();
+  };
+
+  const saveImageProfile = async () => {
+    setIsImageBusy(true);
+    setImageFeedback(undefined);
+
+    try {
+      const normalizedProfile = {
+        ...imageProfile,
+        model: imageProfile.model.trim(),
+        baseUrl: normalizeBaseUrl(imageProfile.baseUrl, { allowInsecureLocalhost: true }),
+      };
+      const snapshot = await sendExtensionRequest({
+        type: "settings.saveImageProfile",
+        profile: normalizedProfile,
+        ...(imageApiKey.trim() ? { apiKey: imageApiKey } : {}),
+      });
+      applySnapshot(snapshot);
+      setImageFeedback({ kind: "success", message: copy.imageSettingsSaved });
+    } catch (error) {
+      setImageFeedback({ kind: "error", message: getFriendlyError(error, copy) });
+    } finally {
+      setIsImageBusy(false);
+    }
   };
 
   const saveProfile = async () => {
@@ -194,6 +274,12 @@ export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
       </div>
 
       <div className="settings-card">
+        <div className="settings-card-heading">
+          <div>
+            <strong>{copy.textProviderSectionTitle}</strong>
+            <span>{copy.textProviderSectionBody}</span>
+          </div>
+        </div>
         <div className="field-grid">
           <label className="form-field">
             <span>{copy.providerLabel}</span>
@@ -364,6 +450,155 @@ export function SettingsPanel({ copy, onSettingsChanged }: SettingsPanelProps) {
         </div>
 
         <p className="mock-note">{copy.mockTestNote}</p>
+      </div>
+
+      <div className="settings-card">
+        <div className="settings-card-heading">
+          <ImageSquare size={20} weight="duotone" aria-hidden="true" />
+          <div>
+            <strong>{copy.imageProviderSectionTitle}</strong>
+            <span>{copy.imageProviderSectionBody}</span>
+          </div>
+        </div>
+
+        <div className="field-grid settings-card-fields">
+          <label className="form-field">
+            <span>{copy.imageProviderLabel}</span>
+            <select
+              value={imageProfile.provider}
+              onChange={(event) => selectImageProvider(event.target.value as ImageProviderId)}
+              disabled={isLoading || isImageBusy}
+            >
+              {Object.values(IMAGE_PROVIDER_DEFINITIONS).map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="form-field">
+            <span>{copy.imageModelLabel}</span>
+            <input
+              value={imageProfile.model}
+              onChange={(event) => updateImageProfile("model", event.target.value)}
+              placeholder={copy.imageModelPlaceholder}
+              disabled={isLoading || isImageBusy}
+              autoComplete="off"
+            />
+          </label>
+
+          <div className="form-field field-wide">
+            <label htmlFor="image-provider-api-key">{copy.imageApiKeyLabel}</label>
+            <span className="secret-input">
+              <Key size={16} aria-hidden="true" />
+              <input
+                id="image-provider-api-key"
+                type={showImageKey ? "text" : "password"}
+                value={imageApiKey}
+                onChange={(event) => setImageApiKey(event.target.value)}
+                placeholder={
+                  imageSecretStatus.hasKey ? copy.apiKeySaved : copy.imageApiKeyPlaceholder
+                }
+                disabled={isLoading || isImageBusy}
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={showImageKey ? copy.hideImageApiKey : copy.showImageApiKey}
+                onClick={() => setShowImageKey((value) => !value)}
+              >
+                {showImageKey ? <EyeSlash size={17} /> : <Eye size={17} />}
+              </button>
+            </span>
+            <small>
+              {imageSecretStatus.hasKey ? copy.apiKeyReplaceHint : copy.imageApiKeyHint}
+            </small>
+          </div>
+        </div>
+
+        <fieldset className="storage-choice">
+          <legend>{copy.storageLabel}</legend>
+          <label data-active={imageProfile.keyPersistence === "session"}>
+            <input
+              type="radio"
+              name="image-key-persistence"
+              value="session"
+              checked={imageProfile.keyPersistence === "session"}
+              onChange={() => updateImageProfile("keyPersistence", "session")}
+              disabled={isLoading || isImageBusy}
+            />
+            <span>
+              <strong>{copy.storageSession}</strong>
+              <small>{copy.storageSessionHint}</small>
+            </span>
+          </label>
+          <label data-active={imageProfile.keyPersistence === "local"}>
+            <input
+              type="radio"
+              name="image-key-persistence"
+              value="local"
+              checked={imageProfile.keyPersistence === "local"}
+              onChange={() => updateImageProfile("keyPersistence", "local")}
+              disabled={isLoading || isImageBusy}
+            />
+            <span>
+              <strong>{copy.storageLocal}</strong>
+              <small>{copy.storageLocalHint}</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <button
+          type="button"
+          className="advanced-toggle"
+          aria-expanded={imageAdvancedOpen}
+          onClick={() => setImageAdvancedOpen((value) => !value)}
+        >
+          <span>{copy.advancedTitle}</span>
+          <CaretDown size={16} data-open={imageAdvancedOpen} />
+        </button>
+
+        {imageAdvancedOpen ? (
+          <div className="advanced-fields">
+            <label className="form-field field-wide">
+              <span>{copy.imageBaseUrlLabel}</span>
+              <input
+                type="url"
+                value={imageProfile.baseUrl}
+                onChange={(event) => updateImageProfile("baseUrl", event.target.value)}
+                disabled={isLoading || isImageBusy}
+                spellCheck={false}
+              />
+              <small>{copy.baseUrlHint}</small>
+            </label>
+          </div>
+        ) : null}
+
+        {imageFeedback ? (
+          <div className="feedback" data-kind={imageFeedback.kind} role="status">
+            {imageFeedback.kind === "success" ? (
+              <CheckCircle size={18} weight="fill" aria-hidden="true" />
+            ) : (
+              <WarningCircle size={18} weight="fill" aria-hidden="true" />
+            )}
+            <span>{imageFeedback.message}</span>
+          </div>
+        ) : null}
+
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={saveImageProfile}
+            disabled={isLoading || isImageBusy}
+          >
+            <FloppyDisk size={17} weight="bold" aria-hidden="true" />
+            {copy.saveImageSettings}
+          </button>
+        </div>
+        <p className="mock-note">{copy.imageSettingsNote}</p>
       </div>
     </section>
   );

@@ -119,11 +119,21 @@ describe("HistoryPanel", () => {
 
     const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
     fireEvent.click(deleteButtons[0]);
-    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    const deleteConfirm = (await screen.findByText("Delete this saved result?")).closest(
+      ".inline-confirm",
+    );
+    expect(deleteConfirm).not.toBeNull();
+    fireEvent.click(within(deleteConfirm as HTMLElement).getByRole("button", { name: "Delete" }));
     await waitFor(async () => expect(await listHistoryRecords()).toHaveLength(1));
 
     fireEvent.click(await screen.findByRole("button", { name: "Clear history" }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear history" }));
+    const clearConfirm = (await screen.findByText("Delete all saved history?")).closest(
+      ".inline-confirm",
+    );
+    expect(clearConfirm).not.toBeNull();
+    fireEvent.click(
+      within(clearConfirm as HTMLElement).getByRole("button", { name: "Clear history" }),
+    );
     await waitFor(async () => expect(await listHistoryRecords()).toEqual([]));
     expect(await screen.findByText("No saved results yet")).toBeVisible();
   });

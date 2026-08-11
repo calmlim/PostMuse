@@ -11,18 +11,39 @@ beforeEach(() => {
 });
 
 describe("settings repository", () => {
-  it("migrates the legacy locale into schema v1", async () => {
+  it("migrates the legacy locale into schema v2", async () => {
     local.data.uiLocale = "zh-CN";
 
     const settings = await loadSettings();
 
-    expect(settings.schemaVersion).toBe(1);
+    expect(settings.schemaVersion).toBe(2);
     expect(settings.uiLocale).toBe("zh-CN");
     expect(settings.textProviderProfiles).toHaveLength(1);
+    expect(settings.imageProviderProfiles).toHaveLength(1);
     expect(local.data[SETTINGS_STORAGE_KEY]).toEqual(settings);
   });
 
-  it("loads valid schema v1 without rewriting it", async () => {
+  it("migrates schema v1 while preserving the text profile", async () => {
+    const current = createDefaultSettings("en");
+    const legacy = {
+      schemaVersion: 1,
+      uiLocale: current.uiLocale,
+      activeTextProviderProfileId: current.activeTextProviderProfileId,
+      textProviderProfiles: current.textProviderProfiles,
+    };
+    local.data[SETTINGS_STORAGE_KEY] = legacy;
+
+    const migrated = await loadSettings();
+
+    expect(migrated).toMatchObject({
+      schemaVersion: 2,
+      textProviderProfiles: legacy.textProviderProfiles,
+      imageProviderProfiles: [expect.objectContaining({ provider: "openai" })],
+    });
+    expect(local.data[SETTINGS_STORAGE_KEY]).toEqual(migrated);
+  });
+
+  it("loads valid schema v2 without rewriting it", async () => {
     const current = createDefaultSettings("en");
     local.data[SETTINGS_STORAGE_KEY] = current;
 

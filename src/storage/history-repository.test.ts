@@ -6,6 +6,7 @@ import {
   deleteHistoryRecord,
   listHistoryRecords,
   saveHistoryRecord,
+  updateHistoryMedia,
   updateHistoryResult,
 } from "./history-repository";
 
@@ -86,5 +87,28 @@ describe("history repository", () => {
     expect(await listHistoryRecords()).toHaveLength(1);
     await clearHistoryRecords();
     expect(await listHistoryRecords()).toEqual([]);
+  });
+
+  it("stores image metadata without image binary data", async () => {
+    const record = await saveHistoryRecord(
+      createGenerationInputFixture({ candidateCount: 1 }),
+      resultFixture("Companion image source"),
+      { recipeVersion: 1, styleTemplateVersion: 1 },
+    );
+
+    await updateHistoryMedia(record.id, {
+      type: "image",
+      provider: "openai",
+      model: "gpt-image-2",
+      prompt: "A clean companion image",
+      aspectRatio: "1:1",
+      size: "1K",
+      mimeType: "image/png",
+      generatedAt: new Date().toISOString(),
+    });
+
+    const stored = (await listHistoryRecords()).find((item) => item.id === record.id);
+    expect(stored?.media).toMatchObject({ provider: "openai", size: "1K" });
+    expect(JSON.stringify(stored)).not.toContain("base64Data");
   });
 });

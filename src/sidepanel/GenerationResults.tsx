@@ -1,7 +1,10 @@
-import { Archive, Check, Copy, WarningCircle } from "@phosphor-icons/react";
+import { Archive, Check, Copy, ImageSquare, WarningCircle } from "@phosphor-icons/react";
 import { useState } from "react";
+import type { ImageHistoryMetadata } from "../core/image/types";
+import type { SettingsSnapshot } from "../core/settings/types";
 import type { GenerationResult } from "../core/generation/types";
 import type { Messages } from "../i18n";
+import { ImageGenerator } from "./ImageGenerator";
 
 interface GenerationResultsProps {
   copy: Messages;
@@ -9,7 +12,12 @@ interface GenerationResultsProps {
   onChange: (result: GenerationResult) => void;
   onSaveRaw?: () => void;
   rawHistorySaved?: boolean;
+  settingsSnapshot?: SettingsSnapshot;
+  onOpenSettings?: () => void;
+  onImageGenerated?: (metadata: ImageHistoryMetadata) => void;
 }
+
+type ImageSource = { kind: "candidate" | "thread" | "raw"; index: number };
 
 const countCharacters = (value: string): number => Array.from(value).length;
 
@@ -19,8 +27,22 @@ export function GenerationResults({
   onChange,
   onSaveRaw,
   rawHistorySaved = false,
+  settingsSnapshot,
+  onOpenSettings = () => undefined,
+  onImageGenerated,
 }: GenerationResultsProps) {
   const [copyStatus, setCopyStatus] = useState<string>();
+  const [imageSource, setImageSource] = useState<ImageSource>();
+
+  const selectedImageText = imageSource
+    ? imageSource.kind === "candidate" && result.format === "candidates"
+      ? result.candidates[imageSource.index]?.text
+      : imageSource.kind === "thread" && result.format === "thread"
+        ? result.threads[0]?.posts[imageSource.index]?.text
+        : imageSource.kind === "raw" && result.format === "raw"
+          ? result.rawText
+          : undefined
+    : undefined;
 
   const copyText = async (text: string, status: string) => {
     try {
@@ -106,14 +128,24 @@ export function GenerationResults({
                   onChange={(event) => updateCandidate(index, event.target.value)}
                   rows={result.candidates.length === 1 ? 10 : 5}
                 />
-                <button
-                  type="button"
-                  className="copy-button"
-                  onClick={() => copyText(candidate.text, copy.copiedCandidate)}
-                >
-                  <Copy size={16} weight="bold" aria-hidden="true" />
-                  {copy.copyText}
-                </button>
+                <div className="result-card-actions">
+                  <button
+                    type="button"
+                    className="copy-button"
+                    onClick={() => setImageSource({ kind: "candidate", index })}
+                  >
+                    <ImageSquare size={16} weight="bold" aria-hidden="true" />
+                    {copy.generateImage}
+                  </button>
+                  <button
+                    type="button"
+                    className="copy-button"
+                    onClick={() => copyText(candidate.text, copy.copiedCandidate)}
+                  >
+                    <Copy size={16} weight="bold" aria-hidden="true" />
+                    {copy.copyText}
+                  </button>
+                </div>
               </article>
             );
           })}
@@ -142,14 +174,24 @@ export function GenerationResults({
                   onChange={(event) => updateThreadPost(index, event.target.value)}
                   rows={5}
                 />
-                <button
-                  type="button"
-                  className="copy-button"
-                  onClick={() => copyText(post.text, copy.copiedCandidate)}
-                >
-                  <Copy size={16} weight="bold" aria-hidden="true" />
-                  {copy.copyText}
-                </button>
+                <div className="result-card-actions">
+                  <button
+                    type="button"
+                    className="copy-button"
+                    onClick={() => setImageSource({ kind: "thread", index })}
+                  >
+                    <ImageSquare size={16} weight="bold" aria-hidden="true" />
+                    {copy.generateImage}
+                  </button>
+                  <button
+                    type="button"
+                    className="copy-button"
+                    onClick={() => copyText(post.text, copy.copiedCandidate)}
+                  >
+                    <Copy size={16} weight="bold" aria-hidden="true" />
+                    {copy.copyText}
+                  </button>
+                </div>
               </article>
             );
           })}
@@ -178,6 +220,14 @@ export function GenerationResults({
             rows={10}
           />
           <div className="result-card-actions">
+            <button
+              type="button"
+              className="copy-button"
+              onClick={() => setImageSource({ kind: "raw", index: 0 })}
+            >
+              <ImageSquare size={16} weight="bold" aria-hidden="true" />
+              {copy.generateImage}
+            </button>
             {onSaveRaw ? (
               <button
                 type="button"
@@ -199,6 +249,17 @@ export function GenerationResults({
             </button>
           </div>
         </article>
+      ) : null}
+
+      {selectedImageText ? (
+        <ImageGenerator
+          copy={copy}
+          sourceText={selectedImageText}
+          snapshot={settingsSnapshot}
+          onOpenSettings={onOpenSettings}
+          onClose={() => setImageSource(undefined)}
+          onGenerated={onImageGenerated}
+        />
       ) : null}
 
       {copyStatus ? (
