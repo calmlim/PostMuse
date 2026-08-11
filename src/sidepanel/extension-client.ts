@@ -6,8 +6,10 @@ import {
 import { getOriginPattern } from "../core/settings/provider-catalog";
 import type { ProviderProfile } from "../core/settings/types";
 import type { GenerationInput } from "../core/generation/types";
+import type { RegenerationInput } from "../core/generation/types";
 import type { ImageGenerationInput } from "../core/image/types";
 import type { ImageProviderProfile } from "../core/settings/types";
+import { supportsInsecureLocalhost } from "../core/settings/runtime-capabilities";
 
 type ExtensionRequestInput =
   | { type: "settings.get" }
@@ -15,10 +17,12 @@ type ExtensionRequestInput =
   | { type: "settings.saveImageProfile"; profile: ImageProviderProfile; apiKey?: string }
   | { type: "provider.test"; profileId: string }
   | { type: "text.generate"; input: GenerationInput }
+  | { type: "text.regenerate"; input: RegenerationInput }
   | { type: "text.cancel"; targetRequestId: string }
   | { type: "image.generate"; input: ImageGenerationInput }
   | { type: "image.cancel"; targetRequestId: string }
   | { type: "data.deleteKeys" }
+  | { type: "data.revokeOrigins" }
   | { type: "data.reset" };
 
 export function sendExtensionRequest(
@@ -39,6 +43,10 @@ export function sendExtensionRequest(
   options?: { requestId?: string },
 ): Promise<ExtensionResponseMap["text.generate"]>;
 export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "text.regenerate" }>,
+  options?: { requestId?: string },
+): Promise<ExtensionResponseMap["text.regenerate"]>;
+export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "text.cancel" }>,
   options?: { requestId?: string },
 ): Promise<ExtensionResponseMap["text.cancel"]>;
@@ -53,6 +61,9 @@ export function sendExtensionRequest(
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "data.deleteKeys" }>,
 ): Promise<ExtensionResponseMap["data.deleteKeys"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "data.revokeOrigins" }>,
+): Promise<ExtensionResponseMap["data.revokeOrigins"]>;
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "data.reset" }>,
 ): Promise<ExtensionResponseMap["data.reset"]>;
@@ -83,6 +94,8 @@ export const requestProviderOriginPermission = (baseUrl: string): Promise<boolea
     return Promise.resolve(false);
   }
 
-  const origin = getOriginPattern(baseUrl, { allowInsecureLocalhost: true });
+  const origin = getOriginPattern(baseUrl, {
+    allowInsecureLocalhost: supportsInsecureLocalhost(),
+  });
   return chrome.permissions.request({ origins: [origin] });
 };

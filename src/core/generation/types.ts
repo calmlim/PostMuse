@@ -4,10 +4,20 @@ export const CONTENT_TYPES = ["post", "reply", "quote", "thread", "long-post"] a
 export const SOURCE_KINDS = ["idea", "draft", "file"] as const;
 export const OUTPUT_LENGTHS = ["short", "medium", "long"] as const;
 export const LANGUAGE_MODES = ["follow-source", "fixed"] as const;
+export const REPLY_INTENTS = [
+  "agree-and-add",
+  "respectful-disagree",
+  "question",
+  "humorous",
+] as const;
+export const QUOTE_INTENTS = ["comment", "summarize", "extend"] as const;
 
 export type ContentType = (typeof CONTENT_TYPES)[number];
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 export type OutputLength = (typeof OUTPUT_LENGTHS)[number];
+export type ReplyIntent = (typeof REPLY_INTENTS)[number];
+export type QuoteIntent = (typeof QUOTE_INTENTS)[number];
+export type GenerationIntent = ReplyIntent | QuoteIntent;
 
 export interface GenerationInput {
   source: {
@@ -15,6 +25,7 @@ export interface GenerationInput {
     text: string;
   };
   contentType: ContentType;
+  intent?: GenerationIntent;
   language: {
     mode: (typeof LANGUAGE_MODES)[number];
     value?: string;
@@ -67,10 +78,25 @@ export type GenerationResult =
   | ThreadGenerationResult
   | RawGenerationResult;
 
+export interface RegenerationInput {
+  input: GenerationInput;
+  target: {
+    kind: "candidate" | "thread-post";
+    index: number;
+    currentTexts: string[];
+  };
+}
+
+export interface RegenerationResult {
+  text: string;
+  provider: ProviderId;
+  model: string;
+}
+
 export interface NormalizedTextRequest {
   system: string;
   user: string;
-  schemaName: "post_candidates" | "thread";
+  schemaName: "post_candidates" | "thread" | "connection_test" | "target_regeneration";
   schema: Record<string, unknown>;
 }
 

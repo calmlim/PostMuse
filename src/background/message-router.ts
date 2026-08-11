@@ -23,10 +23,20 @@ import { saveHistoryRecord } from "../storage/history-repository";
 import { savePendingXContext } from "../storage/pending-context";
 import { loadResolvedPromptLibrary } from "../storage/prompt-repository";
 import { PROMPT_RECIPE_VERSION } from "../core/prompts/prompt-builder";
-import { runMockConnectionTest } from "./mock-provider-tester";
-import { hasProviderOriginPermission } from "./permissions";
+import {
+  createImageSecretBinding,
+  createTextSecretBinding,
+  hasSameSecretDestination,
+} from "../core/settings/secret-binding";
+import { runConnectionTest } from "./provider-connection-tester";
+import {
+  getGrantedProviderOrigins,
+  hasProviderOriginPermission,
+  revokeGrantedProviderOrigins,
+} from "./permissions";
 import { generateText } from "./text-generation";
 import { generateImage } from "./image-generation";
+import { regenerateText } from "./text-regeneration";
 import { resetPostMuseData } from "../storage/data-reset";
 
 type AnyExtensionResponse = ExtensionResponse<ExtensionResponseMap[keyof ExtensionResponseMap]>;
@@ -65,8 +75,8 @@ const getSnapshot = async () => {
   const imageProfile = getActiveImageProviderProfile(settings);
   return {
     settings,
-    activeSecretStatus: await getSecretStatus(profile.id),
-    activeImageSecretStatus: await getSecretStatus(imageProfile.id),
+    activeSecretStatus: await getSecretStatus(createTextSecretBinding(profile)),
+    activeImageSecretStatus: await getSecretStatus(createImageSecretBinding(imageProfile)),
   };
 };
 
@@ -91,7 +101,7 @@ const runGeneration = async (
       );
     }
 
-    const apiKey = await readApiKey(profile.id, profile.keyPersistence);
+    const apiKey = await readApiKey(createTextSecretBinding(profile), profile.keyPersistence);
     const result = await generateText(input, profile, apiKey, controller.signal);
     if (saveInlineHistory && result.format !== "raw" && (await loadHistoryEnabled())) {
       try {
@@ -131,7 +141,7 @@ const runImageGeneration = async (
         "Allow access to the image Provider host before generating.",
       );
     }
-    const apiKey = await readApiKey(profile.id, profile.keyPersistence);
+    const apiKey = await readApiKey(createImageSecretBinding(profile), profile.keyPersistence);
     return {
       ok: true,
       data: await generateImage(input, profile, apiKey, controller.signal),
@@ -152,7 +162,7 @@ const handleRequest = async (
   if (request.type === "inline.bootstrap") {
     const settings = await loadSettings();
     const profile = getActiveProviderProfile(settings);
-    const secretStatus = await getSecretStatus(profile.id);
+    const secretStatus = await getSecretStatus(createTextSecretBinding(profile));
     const styles = (await loadResolvedPromptLibrary()).active.map(
       ({ id, label, version, source, isOverridden }) => ({
         id,
@@ -185,12 +195,20 @@ const handleRequest = async (
   }
 
   if (request.type === "settings.saveProfile") {
-    const currentStatus = await getSecretStatus(request.profile.id);
+    const settings = await loadSettings();
+    const currentProfile = settings.textProviderProfiles.find(
+      (profile) => profile.id === request.profile.id,
+    );
+    const nextBinding = createTextSecretBinding(request.profile);
+    const currentBinding = createTextSecretBinding(currentProfile ?? request.profile);
+    const currentStatus = await getSecretStatus(currentBinding);
     const apiKey = request.apiKey?.trim();
 
     if (
-      currentStatus.hasKey &&
-      currentStatus.persistence !== request.profile.keyPersistence &&
+      (currentStatus.requiresReentry ||
+        (currentStatus.hasKey &&
+          (!hasSameSecretDestination(currentBinding, nextBinding) ||
+            currentStatus.persistence !== request.profile.keyPersistence))) &&
       !apiKey
     ) {
       throw new AppError(
@@ -201,19 +219,27 @@ const handleRequest = async (
 
     await upsertProviderProfile(request.profile);
     if (apiKey) {
-      await saveApiKey(request.profile.id, apiKey, request.profile.keyPersistence);
+      await saveApiKey(nextBinding, apiKey, request.profile.keyPersistence);
     }
 
     return { ok: true, data: await getSnapshot() };
   }
 
   if (request.type === "settings.saveImageProfile") {
-    const currentStatus = await getSecretStatus(request.profile.id);
+    const settings = await loadSettings();
+    const currentProfile = settings.imageProviderProfiles.find(
+      (profile) => profile.id === request.profile.id,
+    );
+    const nextBinding = createImageSecretBinding(request.profile);
+    const currentBinding = createImageSecretBinding(currentProfile ?? request.profile);
+    const currentStatus = await getSecretStatus(currentBinding);
     const apiKey = request.apiKey?.trim();
 
     if (
-      currentStatus.hasKey &&
-      currentStatus.persistence !== request.profile.keyPersistence &&
+      (currentStatus.requiresReentry ||
+        (currentStatus.hasKey &&
+          (!hasSameSecretDestination(currentBinding, nextBinding) ||
+            currentStatus.persistence !== request.profile.keyPersistence))) &&
       !apiKey
     ) {
       throw new AppError(
@@ -224,7 +250,7 @@ const handleRequest = async (
 
     await upsertImageProviderProfile(request.profile);
     if (apiKey) {
-      await saveApiKey(request.profile.id, apiKey, request.profile.keyPersistence);
+      await saveApiKey(nextBinding, apiKey, request.profile.keyPersistence);
     }
 
     return { ok: true, data: await getSnapshot() };
@@ -235,13 +261,26 @@ const handleRequest = async (
     return { ok: true, data: await getSnapshot() };
   }
 
+  if (request.type === "data.revokeOrigins") {
+    return { ok: true, data: await revokeGrantedProviderOrigins() };
+  }
+
   if (request.type === "data.reset") {
     for (const controller of activeGenerationRequests.values()) {
       controller.abort();
     }
     activeGenerationRequests.clear();
+    let remainingOriginCount = 0;
+    try {
+      remainingOriginCount = (await revokeGrantedProviderOrigins()).remainingOriginCount;
+    } catch {
+      remainingOriginCount = (await getGrantedProviderOrigins().catch(() => [])).length;
+    }
     await resetPostMuseData();
-    return { ok: true, data: await getSnapshot() };
+    return {
+      ok: true,
+      data: { snapshot: await getSnapshot(), remainingOriginCount },
+    };
   }
 
   if (
@@ -256,6 +295,31 @@ const handleRequest = async (
 
   if (request.type === "text.generate" || request.type === "inline.generate") {
     return runGeneration(request.requestId, request.input, request.type === "inline.generate");
+  }
+
+  if (request.type === "text.regenerate") {
+    if (activeGenerationRequests.has(request.requestId)) {
+      throw new AppError("INVALID_REQUEST", "A request with this id is already running.");
+    }
+    const controller = new AbortController();
+    activeGenerationRequests.set(request.requestId, controller);
+    try {
+      const settings = await loadSettings();
+      const profile = getActiveProviderProfile(settings);
+      if (!(await hasProviderOriginPermission(profile.baseUrl))) {
+        throw new AppError(
+          "HOST_PERMISSION_REQUIRED",
+          "Allow access to the Provider host before regenerating.",
+        );
+      }
+      const apiKey = await readApiKey(createTextSecretBinding(profile), profile.keyPersistence);
+      return {
+        ok: true,
+        data: await regenerateText(request.input, profile, apiKey, controller.signal),
+      };
+    } finally {
+      activeGenerationRequests.delete(request.requestId);
+    }
   }
 
   if (request.type === "image.generate") {
@@ -275,8 +339,20 @@ const handleRequest = async (
     );
   }
 
-  const apiKey = await readApiKey(profile.id, profile.keyPersistence);
-  return { ok: true, data: runMockConnectionTest(profile, apiKey) };
+  if (activeGenerationRequests.has(request.requestId)) {
+    throw new AppError("INVALID_REQUEST", "A request with this id is already running.");
+  }
+  const controller = new AbortController();
+  activeGenerationRequests.set(request.requestId, controller);
+  try {
+    const apiKey = await readApiKey(createTextSecretBinding(profile), profile.keyPersistence);
+    return {
+      ok: true,
+      data: await runConnectionTest(profile, apiKey, controller.signal),
+    };
+  } finally {
+    activeGenerationRequests.delete(request.requestId);
+  }
 };
 
 export const routeExtensionMessage = async (

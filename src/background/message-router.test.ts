@@ -13,6 +13,8 @@ import { takePendingXContext } from "../storage/pending-context";
 let local: StorageAreaMock;
 let session: StorageAreaMock;
 const permissionContains = vi.fn();
+const permissionGetAll = vi.fn();
+const permissionRemove = vi.fn();
 const fetchMock = vi.fn();
 const sidePanelOpen = vi.fn();
 
@@ -32,6 +34,10 @@ beforeEach(() => {
   session = createStorageAreaMock();
   permissionContains.mockReset();
   permissionContains.mockResolvedValue(true);
+  permissionGetAll.mockReset();
+  permissionGetAll.mockResolvedValue({ origins: [] });
+  permissionRemove.mockReset();
+  permissionRemove.mockResolvedValue(true);
   fetchMock.mockReset();
   sidePanelOpen.mockReset();
   sidePanelOpen.mockResolvedValue(undefined);
@@ -39,7 +45,11 @@ beforeEach(() => {
 
   vi.stubGlobal("chrome", {
     storage: { local, session },
-    permissions: { contains: permissionContains },
+    permissions: {
+      contains: permissionContains,
+      getAll: permissionGetAll,
+      remove: permissionRemove,
+    },
     sidePanel: { open: sidePanelOpen },
     runtime: {
       id: "extension-id",
@@ -92,6 +102,42 @@ describe("background message router", () => {
     });
   });
 
+  it("requires key re-entry before changing Provider destination but not its path", async () => {
+    const profile = { ...createDefaultProviderProfile(), model: "gpt-5-mini" };
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "binding-save",
+        profile,
+        apiKey: "sk-bound-key",
+      },
+      trustedSender,
+    );
+
+    await expect(
+      routeExtensionMessage(
+        {
+          type: "settings.saveProfile",
+          requestId: "binding-path",
+          profile: { ...profile, baseUrl: "https://api.openai.com/proxy/v1" },
+        },
+        trustedSender,
+      ),
+    ).resolves.toMatchObject({ ok: true, data: { activeSecretStatus: { hasKey: true } } });
+
+    await expect(
+      routeExtensionMessage(
+        {
+          type: "settings.saveProfile",
+          requestId: "binding-origin",
+          profile: { ...profile, baseUrl: "https://proxy.example.com/v1" },
+        },
+        trustedSender,
+      ),
+    ).resolves.toMatchObject({ ok: false, error: { code: "API_KEY_REENTRY_REQUIRED" } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("allows only the limited inline bootstrap response from an X content script", async () => {
     const response = await routeExtensionMessage(
       { type: "inline.bootstrap", requestId: "inline-bootstrap-1" },
@@ -122,7 +168,7 @@ describe("background message router", () => {
     ).resolves.toMatchObject({ ok: false, error: { code: "UNTRUSTED_SENDER" } });
   });
 
-  it("requires exact host permission before the mock setup test", async () => {
+  it("requires exact host permission before the live setup test", async () => {
     const profile = { ...createDefaultProviderProfile(), model: "gpt-5-mini" };
     await routeExtensionMessage(
       {
@@ -147,7 +193,7 @@ describe("background message router", () => {
     });
   });
 
-  it("completes a local-only mock test when storage and permission are ready", async () => {
+  it("sends a fixed live probe when storage and permission are ready", async () => {
     const profile = { ...createDefaultProviderProfile(), model: "gpt-5-mini" };
     await routeExtensionMessage(
       {
@@ -158,6 +204,11 @@ describe("background message router", () => {
       },
       trustedSender,
     );
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '{"ok":true}' } }] }), {
+        status: 200,
+      }),
+    );
 
     const response = await routeExtensionMessage(
       { type: "provider.test", requestId: "request-2", profileId: profile.id },
@@ -166,8 +217,15 @@ describe("background message router", () => {
 
     expect(response).toMatchObject({
       ok: true,
-      data: { mode: "mock", provider: "openai-compatible", model: "gpt-5-mini" },
+      data: { mode: "live", provider: "openai-compatible", model: "gpt-5-mini" },
     });
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(requestBody.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: 'Return {"ok":true}. Do not include commentary.' }),
+      ]),
+    );
+    expect(JSON.stringify(requestBody)).not.toContain("draft");
   });
 
   it("generates through the active Provider without exposing its key", async () => {
@@ -221,6 +279,51 @@ describe("background message router", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(requestBody.messages[0].content).toContain("Use the saved prompt override.");
+  });
+
+  it("regenerates one thread position with neighboring context", async () => {
+    const profile = { ...createDefaultProviderProfile(), model: "gpt-test" };
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "regen-settings",
+        profile,
+        apiKey: "sk-regen-secret",
+      },
+      trustedSender,
+    );
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"text":"Stronger close"}' } }] }),
+        { status: 200 },
+      ),
+    );
+    const input = createGenerationInputFixture({
+      contentType: "thread",
+      candidateCount: 1,
+      threadCount: 3,
+    });
+
+    await expect(
+      routeExtensionMessage(
+        {
+          type: "text.regenerate",
+          requestId: "regen-thread-close",
+          input: {
+            input,
+            target: {
+              kind: "thread-post",
+              index: 2,
+              currentTexts: ["Hook", "Development", "Old close"],
+            },
+          },
+        },
+        trustedSender,
+      ),
+    ).resolves.toMatchObject({ ok: true, data: { text: "Stronger close" } });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(JSON.stringify(body)).toContain("closing post or CTA");
+    expect(JSON.stringify(body)).toContain("Development");
   });
 
   it("generates for the X inline panel in the worker and saves structured history", async () => {
@@ -424,12 +527,34 @@ describe("background message router", () => {
     ).resolves.toMatchObject({
       ok: true,
       data: {
-        settings: { schemaVersion: 2, activeTextProviderProfileId: "default-text-provider" },
-        activeSecretStatus: { hasKey: false },
-        activeImageSecretStatus: { hasKey: false },
+        remainingOriginCount: 0,
+        snapshot: {
+          settings: { schemaVersion: 2, activeTextProviderProfileId: "default-text-provider" },
+          activeSecretStatus: { hasKey: false },
+          activeImageSecretStatus: { hasKey: false },
+        },
       },
     });
     expect(await listHistoryRecords()).toEqual([]);
+  });
+
+  it("revokes granted optional Provider origins and reports what remains", async () => {
+    permissionGetAll
+      .mockResolvedValueOnce({ origins: ["https://api.openai.com/*", "https://api.x.ai/*"] })
+      .mockResolvedValueOnce({ origins: ["https://api.x.ai/*"] });
+
+    await expect(
+      routeExtensionMessage(
+        { type: "data.revokeOrigins", requestId: "revoke-origins" },
+        trustedSender,
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      data: { revokedOriginCount: 1, remainingOriginCount: 1 },
+    });
+    expect(permissionRemove).toHaveBeenCalledWith({
+      origins: ["https://api.openai.com/*", "https://api.x.ai/*"],
+    });
   });
 
   it("cancels an active generation request", async () => {

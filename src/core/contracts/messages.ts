@@ -1,12 +1,18 @@
 import type {
   ImageProviderProfile,
-  MockConnectionResult,
+  ConnectionTestResult,
+  ProviderPermissionSummary,
   ProviderProfile,
   SettingsSnapshot,
 } from "../settings/types";
 import { isImageProviderProfile, isProviderProfile, isRecordValue } from "../settings/validation";
-import type { GenerationInput, GenerationResult } from "../generation/types";
-import { isGenerationInput } from "../generation/validation";
+import type {
+  GenerationInput,
+  GenerationResult,
+  RegenerationInput,
+  RegenerationResult,
+} from "../generation/types";
+import { isGenerationInput, isRegenerationInput } from "../generation/validation";
 import type { ImageGenerationInput, ImageGenerationResult } from "../image/types";
 import { isImageGenerationInput } from "../image/validation";
 
@@ -16,10 +22,12 @@ export const MESSAGE_TYPES = [
   "settings.saveImageProfile",
   "provider.test",
   "text.generate",
+  "text.regenerate",
   "text.cancel",
   "image.generate",
   "image.cancel",
   "data.deleteKeys",
+  "data.revokeOrigins",
   "data.reset",
   "inline.bootstrap",
   "inline.generate",
@@ -45,10 +53,12 @@ export type ExtensionRequest =
     }
   | { type: "provider.test"; requestId: string; profileId: string }
   | { type: "text.generate"; requestId: string; input: GenerationInput }
+  | { type: "text.regenerate"; requestId: string; input: RegenerationInput }
   | { type: "text.cancel"; requestId: string; targetRequestId: string }
   | { type: "image.generate"; requestId: string; input: ImageGenerationInput }
   | { type: "image.cancel"; requestId: string; targetRequestId: string }
   | { type: "data.deleteKeys"; requestId: string }
+  | { type: "data.revokeOrigins"; requestId: string }
   | { type: "data.reset"; requestId: string }
   | { type: "inline.bootstrap"; requestId: string }
   | { type: "inline.generate"; requestId: string; input: GenerationInput }
@@ -97,13 +107,15 @@ export interface ExtensionResponseMap {
   "settings.get": SettingsSnapshot;
   "settings.saveProfile": SettingsSnapshot;
   "settings.saveImageProfile": SettingsSnapshot;
-  "provider.test": MockConnectionResult;
+  "provider.test": ConnectionTestResult;
   "text.generate": GenerationResult;
+  "text.regenerate": RegenerationResult;
   "text.cancel": { cancelled: boolean };
   "image.generate": ImageGenerationResult;
   "image.cancel": { cancelled: boolean };
   "data.deleteKeys": SettingsSnapshot;
-  "data.reset": SettingsSnapshot;
+  "data.revokeOrigins": ProviderPermissionSummary;
+  "data.reset": { snapshot: SettingsSnapshot; remainingOriginCount: number };
   "inline.bootstrap": InlineBootstrap;
   "inline.generate": GenerationResult;
   "inline.cancel": { cancelled: boolean };
@@ -126,6 +138,7 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
   if (
     value.type === "settings.get" ||
     value.type === "data.deleteKeys" ||
+    value.type === "data.revokeOrigins" ||
     value.type === "data.reset" ||
     value.type === "inline.bootstrap"
   ) {
@@ -150,6 +163,10 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
 
   if (value.type === "text.generate" || value.type === "inline.generate") {
     return isGenerationInput(value.input);
+  }
+
+  if (value.type === "text.regenerate") {
+    return isRegenerationInput(value.input);
   }
 
   if (value.type === "image.generate") {

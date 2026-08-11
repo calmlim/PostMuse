@@ -25,6 +25,7 @@ import type {
   SecretStatus,
   SettingsSnapshot,
 } from "../core/settings/types";
+import { supportsInsecureLocalhost } from "../core/settings/runtime-capabilities";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
 import { PrivacyDataPanel } from "./PrivacyDataPanel";
 
@@ -69,6 +70,17 @@ const getFriendlyError = (error: unknown, copy: Messages): string => {
     HOST_PERMISSION_REQUIRED: copy.errorPermissionRequired,
     MODEL_REQUIRED: copy.errorModelRequired,
     INVALID_REQUEST: copy.errorInvalidSettings,
+    AUTH_INVALID: copy.errorAuthInvalid,
+    MODEL_FORBIDDEN: copy.errorModelForbidden,
+    MODEL_NOT_FOUND: copy.errorModelNotFound,
+    ENDPOINT_NOT_FOUND: copy.errorEndpointNotFound,
+    PROVIDER_REQUEST_INVALID: copy.errorProviderRequestInvalid,
+    RATE_LIMITED: copy.errorRateLimited,
+    PROVIDER_UNAVAILABLE: copy.errorProviderUnavailable,
+    TIMEOUT: copy.errorTimeout,
+    NETWORK_ERROR: copy.errorNetwork,
+    CONTENT_REJECTED: copy.errorContentRejected,
+    OUTPUT_INVALID: copy.errorOutputInvalid,
   };
 
   return localized[error.name] ?? error.message ?? copy.errorGeneric;
@@ -144,7 +156,12 @@ export function SettingsPanel({
           current.baseUrl === currentDefault ? nextDefinition.defaultBaseUrl : current.baseUrl,
       };
     });
-    setFeedback(undefined);
+    setApiKey("");
+    setFeedback(
+      secretStatus.hasKey || secretStatus.requiresReentry
+        ? { kind: "error", message: copy.errorKeyReentry }
+        : undefined,
+    );
   };
 
   const updateImageProfile = <K extends keyof ImageProviderProfile>(
@@ -173,7 +190,12 @@ export function SettingsPanel({
             : current.baseUrl,
       };
     });
-    setImageFeedback(undefined);
+    setImageApiKey("");
+    setImageFeedback(
+      imageSecretStatus.hasKey || imageSecretStatus.requiresReentry
+        ? { kind: "error", message: copy.errorKeyReentry }
+        : undefined,
+    );
   };
 
   const applySnapshot = (snapshot: SettingsSnapshot) => {
@@ -196,7 +218,9 @@ export function SettingsPanel({
       const normalizedProfile = {
         ...imageProfile,
         model: imageProfile.model.trim(),
-        baseUrl: normalizeBaseUrl(imageProfile.baseUrl, { allowInsecureLocalhost: true }),
+        baseUrl: normalizeBaseUrl(imageProfile.baseUrl, {
+          allowInsecureLocalhost: supportsInsecureLocalhost(),
+        }),
       };
       const snapshot = await sendExtensionRequest({
         type: "settings.saveImageProfile",
@@ -220,7 +244,9 @@ export function SettingsPanel({
       const normalizedProfile = {
         ...profile,
         model: profile.model.trim(),
-        baseUrl: normalizeBaseUrl(profile.baseUrl, { allowInsecureLocalhost: true }),
+        baseUrl: normalizeBaseUrl(profile.baseUrl, {
+          allowInsecureLocalhost: supportsInsecureLocalhost(),
+        }),
       };
       const snapshot = await sendExtensionRequest({
         type: "settings.saveProfile",
@@ -260,7 +286,9 @@ export function SettingsPanel({
       const normalizedProfile = {
         ...profile,
         model: profile.model.trim(),
-        baseUrl: normalizeBaseUrl(profile.baseUrl, { allowInsecureLocalhost: true }),
+        baseUrl: normalizeBaseUrl(profile.baseUrl, {
+          allowInsecureLocalhost: supportsInsecureLocalhost(),
+        }),
       };
       const snapshot = await sendExtensionRequest({
         type: "settings.saveProfile",
@@ -274,7 +302,9 @@ export function SettingsPanel({
       });
       setFeedback({
         kind: "success",
-        message: copy.mockTestPassed.replace("{model}", result.model),
+        message: copy.connectionTestPassed
+          .replace("{model}", result.model)
+          .replace("{time}", new Date(result.checkedAt).toLocaleString()),
       });
     } catch (error) {
       setFeedback({ kind: "error", message: getFriendlyError(error, copy) });
@@ -334,7 +364,13 @@ export function SettingsPanel({
                 type={showKey ? "text" : "password"}
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder={secretStatus.hasKey ? copy.apiKeySaved : copy.apiKeyPlaceholder}
+                placeholder={
+                  secretStatus.requiresReentry
+                    ? copy.apiKeyReentryPlaceholder
+                    : secretStatus.hasKey
+                      ? copy.apiKeySaved
+                      : copy.apiKeyPlaceholder
+                }
                 disabled={isLoading || isBusy}
                 autoComplete="off"
               />
@@ -347,7 +383,13 @@ export function SettingsPanel({
                 {showKey ? <EyeSlash size={17} /> : <Eye size={17} />}
               </button>
             </span>
-            <small>{secretStatus.hasKey ? copy.apiKeyReplaceHint : copy.apiKeyHint}</small>
+            <small>
+              {secretStatus.requiresReentry
+                ? copy.apiKeyReentryHint
+                : secretStatus.hasKey
+                  ? copy.apiKeyReplaceHint
+                  : copy.apiKeyHint}
+            </small>
           </div>
         </div>
 
@@ -404,7 +446,9 @@ export function SettingsPanel({
                 disabled={isLoading || isBusy}
                 spellCheck={false}
               />
-              <small>{copy.baseUrlHint}</small>
+              <small>
+                {supportsInsecureLocalhost() ? copy.baseUrlHint : copy.baseUrlHttpsOnlyHint}
+              </small>
             </label>
 
             <label className="form-field">
@@ -467,7 +511,7 @@ export function SettingsPanel({
           </button>
         </div>
 
-        <p className="mock-note">{copy.mockTestNote}</p>
+        <p className="mock-note">{copy.connectionTestNote}</p>
       </div>
 
       <div className="settings-card">
@@ -516,7 +560,11 @@ export function SettingsPanel({
                 value={imageApiKey}
                 onChange={(event) => setImageApiKey(event.target.value)}
                 placeholder={
-                  imageSecretStatus.hasKey ? copy.apiKeySaved : copy.imageApiKeyPlaceholder
+                  imageSecretStatus.requiresReentry
+                    ? copy.apiKeyReentryPlaceholder
+                    : imageSecretStatus.hasKey
+                      ? copy.apiKeySaved
+                      : copy.imageApiKeyPlaceholder
                 }
                 disabled={isLoading || isImageBusy}
                 autoComplete="off"
@@ -531,7 +579,11 @@ export function SettingsPanel({
               </button>
             </span>
             <small>
-              {imageSecretStatus.hasKey ? copy.apiKeyReplaceHint : copy.imageApiKeyHint}
+              {imageSecretStatus.requiresReentry
+                ? copy.apiKeyReentryHint
+                : imageSecretStatus.hasKey
+                  ? copy.apiKeyReplaceHint
+                  : copy.imageApiKeyHint}
             </small>
           </div>
         </div>
@@ -589,7 +641,9 @@ export function SettingsPanel({
                 disabled={isLoading || isImageBusy}
                 spellCheck={false}
               />
-              <small>{copy.baseUrlHint}</small>
+              <small>
+                {supportsInsecureLocalhost() ? copy.baseUrlHint : copy.baseUrlHttpsOnlyHint}
+              </small>
             </label>
           </div>
         ) : null}

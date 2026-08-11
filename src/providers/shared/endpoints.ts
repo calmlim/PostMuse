@@ -1,7 +1,10 @@
 import { normalizeBaseUrl } from "../../core/settings/provider-catalog";
+import { supportsInsecureLocalhost } from "../../core/settings/runtime-capabilities";
 
 export const appendApiPath = (baseUrl: string, apiPath: string): string => {
-  const normalized = normalizeBaseUrl(baseUrl, { allowInsecureLocalhost: true });
+  const normalized = normalizeBaseUrl(baseUrl, {
+    allowInsecureLocalhost: supportsInsecureLocalhost(),
+  });
   const base = new URL(normalized);
   const cleanApiPath = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
   const pathWithoutDuplicateVersion =

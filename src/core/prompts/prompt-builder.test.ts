@@ -44,6 +44,18 @@ describe("prompt builder", () => {
     expect(request.system).toContain("exactly 5 string posts");
   });
 
+  it("adds explicit and backward-compatible reply and quote intents", () => {
+    const reply = buildTextGenerationRequest(
+      createGenerationInputFixture({ contentType: "reply", intent: "respectful-disagree" }),
+    );
+    const oldQuote = buildTextGenerationRequest(
+      createGenerationInputFixture({ contentType: "quote" }),
+    );
+
+    expect(reply.system).toContain("Disagree respectfully");
+    expect(oldQuote.system).toContain("own concise commentary");
+  });
+
   it("uses a resolved user style without exposing it to the source layer", () => {
     const request = buildTextGenerationRequest(createGenerationInputFixture(), {
       instruction: "Use the user's saved voice override.",

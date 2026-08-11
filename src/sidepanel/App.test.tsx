@@ -55,7 +55,7 @@ beforeEach(() => {
     return {
       ok: true,
       data: {
-        mode: "mock",
+        mode: "live",
         provider: "openai-compatible",
         model: "gpt-5-mini",
         checkedAt: "2026-08-11T00:00:00.000Z",
@@ -111,7 +111,7 @@ describe("Side Panel App", () => {
     expect(await screen.findByRole("heading", { name: "把想法变成推文" })).toBeVisible();
   });
 
-  it("runs the Phase 1 local setup check in permission-first order", async () => {
+  it("runs the live connection test in permission-first order", async () => {
     const order: string[] = [];
     permissionsRequest.mockImplementation(async () => {
       order.push("permission");
@@ -141,7 +141,7 @@ describe("Side Panel App", () => {
       return {
         ok: true,
         data: {
-          mode: "mock",
+          mode: "live",
           provider: "openai-compatible",
           model: "gpt-5-mini",
           checkedAt: "2026-08-11T00:00:00.000Z",
@@ -156,9 +156,9 @@ describe("Side Panel App", () => {
     fireEvent.change(model, { target: { value: "gpt-5-mini" } });
     fireEvent.change(screen.getByLabelText("API key"), { target: { value: "sk-test-value" } });
     order.length = 0;
-    fireEvent.click(screen.getByRole("button", { name: "Test setup" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run live test" }));
 
-    expect(await screen.findByText(/Local setup check passed/)).toBeVisible();
+    expect(await screen.findByText(/Live connection passed/)).toBeVisible();
     expect(order).toEqual(["permission", "settings.saveProfile", "provider.test", "settings.get"]);
     expect(permissionsRequest).toHaveBeenCalledWith({ origins: ["https://api.openai.com/*"] });
   });
@@ -348,6 +348,25 @@ describe("Side Panel App", () => {
     expect(runtimeSendMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "text.generate" }),
     );
+  });
+
+  it("rejects oversized pasted text and files before generation", async () => {
+    render(<App />);
+    const source = await screen.findByLabelText("Your idea or draft");
+    fireEvent.change(source, { target: { value: "x".repeat(100_001) } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect(
+      screen.getByText(
+        "The source is longer than 100,000 characters. Shorten it before generating.",
+      ),
+    ).toBeVisible();
+
+    const file = new File(["small"], "oversized.txt", { type: "text/plain" });
+    Object.defineProperty(file, "size", { configurable: true, value: 1024 * 1024 + 1 });
+    fireEvent.change(screen.getByLabelText("Add .txt or .md"), {
+      target: { files: [file] },
+    });
+    expect(screen.getByText("The file is larger than 1 MiB. Choose a smaller file.")).toBeVisible();
   });
 
   it("keeps the draft while the user visits Settings", async () => {

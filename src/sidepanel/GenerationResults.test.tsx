@@ -11,6 +11,7 @@ describe("GenerationResults", () => {
       value: { writeText },
     });
     const onChange = vi.fn();
+    const onCopied = vi.fn();
     const result = {
       format: "thread" as const,
       contentType: "thread" as const,
@@ -29,7 +30,14 @@ describe("GenerationResults", () => {
       softCharacterLimit: 280,
     };
 
-    render(<GenerationResults copy={getMessages("en")} result={result} onChange={onChange} />);
+    render(
+      <GenerationResults
+        copy={getMessages("en")}
+        result={result}
+        onChange={onChange}
+        onCopied={onCopied}
+      />,
+    );
     fireEvent.change(screen.getByLabelText("Post 1 of 2"), { target: { value: "New hook" } });
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -46,6 +54,7 @@ describe("GenerationResults", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Copy entire thread" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("Hook\n\nClose"));
+    expect(onCopied).toHaveBeenCalledWith(result);
   });
 
   it("renders unsafe Provider strings only as editable text", () => {
@@ -69,5 +78,42 @@ describe("GenerationResults", () => {
     );
     expect(document.querySelector("img")).toBeNull();
     expect(document.querySelector("script")).toBeNull();
+  });
+
+  it("offers targeted and full regeneration without changing the current result itself", () => {
+    const onRegenerateItem = vi.fn();
+    const onRegenerateAll = vi.fn();
+    const result = {
+      format: "candidates" as const,
+      contentType: "reply" as const,
+      candidates: [
+        { id: "candidate-1", text: "Keep one" },
+        { id: "candidate-2", text: "Replace two" },
+      ],
+      warnings: [],
+      provider: "anthropic" as const,
+      model: "test-model",
+      softCharacterLimit: 280,
+    };
+
+    render(
+      <GenerationResults
+        copy={getMessages("en")}
+        result={result}
+        onChange={vi.fn()}
+        onRegenerateItem={onRegenerateItem}
+        onRegenerateAll={onRegenerateAll}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Regenerate" })[1]);
+    expect(onRegenerateItem).toHaveBeenCalledWith({
+      kind: "candidate",
+      index: 1,
+      currentTexts: ["Keep one", "Replace two"],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate all" }));
+    expect(onRegenerateAll).toHaveBeenCalledOnce();
+    expect(screen.getByLabelText("Candidate 1")).toHaveValue("Keep one");
   });
 });

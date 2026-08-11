@@ -1,5 +1,6 @@
 import { isLocale } from "../../i18n";
 import { isImageProviderId, isProviderId, normalizeBaseUrl } from "./provider-catalog";
+import { supportsInsecureLocalhost } from "./runtime-capabilities";
 import type { ImageProviderProfile, ProviderProfile, SecretPersistence, SettingsV2 } from "./types";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -14,7 +15,9 @@ export const isProviderProfile = (value: unknown): value is ProviderProfile => {
   }
 
   try {
-    normalizeBaseUrl(String(value.baseUrl ?? ""), { allowInsecureLocalhost: true });
+    normalizeBaseUrl(String(value.baseUrl ?? ""), {
+      allowInsecureLocalhost: supportsInsecureLocalhost(),
+    });
   } catch {
     return false;
   }
@@ -48,7 +51,9 @@ export const isImageProviderProfile = (value: unknown): value is ImageProviderPr
   }
 
   try {
-    normalizeBaseUrl(String(value.baseUrl ?? ""), { allowInsecureLocalhost: true });
+    normalizeBaseUrl(String(value.baseUrl ?? ""), {
+      allowInsecureLocalhost: supportsInsecureLocalhost(),
+    });
   } catch {
     return false;
   }

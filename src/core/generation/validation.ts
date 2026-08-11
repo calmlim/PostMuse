@@ -4,8 +4,11 @@ import {
   CONTENT_TYPES,
   LANGUAGE_MODES,
   OUTPUT_LENGTHS,
+  QUOTE_INTENTS,
+  REPLY_INTENTS,
   SOURCE_KINDS,
   type GenerationInput,
+  type RegenerationInput,
 } from "./types";
 
 export const MAX_SOURCE_CHARACTERS = 100_000;
@@ -45,6 +48,18 @@ export const isGenerationInput = (value: unknown): value is GenerationInput => {
   }
 
   if (
+    (contentType === "reply" &&
+      value.intent !== undefined &&
+      !isOneOf(REPLY_INTENTS, value.intent)) ||
+    (contentType === "quote" &&
+      value.intent !== undefined &&
+      !isOneOf(QUOTE_INTENTS, value.intent)) ||
+    (contentType !== "reply" && contentType !== "quote" && value.intent !== undefined)
+  ) {
+    return false;
+  }
+
+  if (
     value.language.mode === "fixed" &&
     (typeof value.language.value !== "string" ||
       value.language.value.trim().length === 0 ||
@@ -71,5 +86,28 @@ export const isGenerationInput = (value: unknown): value is GenerationInput => {
     isOptionalText(value.tone, 500) &&
     isOptionalText(value.mustInclude, 1_000) &&
     isOptionalText(value.mustAvoid, 1_000)
+  );
+};
+
+export const isRegenerationInput = (value: unknown): value is RegenerationInput => {
+  if (!isRecordValue(value) || !isGenerationInput(value.input) || !isRecordValue(value.target)) {
+    return false;
+  }
+  const { kind, index, currentTexts } = value.target;
+  const kindMatchesInput =
+    (kind === "candidate" && value.input.contentType !== "thread") ||
+    (kind === "thread-post" && value.input.contentType === "thread");
+  return (
+    kindMatchesInput &&
+    typeof index === "number" &&
+    Number.isInteger(index) &&
+    Array.isArray(currentTexts) &&
+    currentTexts.length > 0 &&
+    currentTexts.length <= 20 &&
+    index >= 0 &&
+    index < currentTexts.length &&
+    currentTexts.every(
+      (text) => typeof text === "string" && text.trim().length > 0 && text.length <= 20_000,
+    )
   );
 };

@@ -83,6 +83,7 @@ export function PrivacyDataPanel({
   const [historyCount, setHistoryCount] = useState(0);
   const [grantedOriginCount, setGrantedOriginCount] = useState(0);
   const [confirmDeleteKeys, setConfirmDeleteKeys] = useState(false);
+  const [confirmRevokeOrigins, setConfirmRevokeOrigins] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string }>();
@@ -146,13 +147,31 @@ export function PrivacyDataPanel({
     setIsBusy(true);
     setFeedback(undefined);
     try {
-      const nextSnapshot = await sendExtensionRequest({ type: "data.reset" });
-      onSnapshot(nextSnapshot);
+      const resetResult = await sendExtensionRequest({ type: "data.reset" });
+      onSnapshot(resetResult.snapshot);
       setHistoryCount(0);
-      setGrantedOriginCount(0);
+      setGrantedOriginCount(resetResult.remainingOriginCount);
       setConfirmReset(false);
       setFeedback({ kind: "success", text: copy.localDataReset });
       onDataReset?.();
+    } catch {
+      setFeedback({ kind: "error", text: copy.dataActionError });
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const revokeOrigins = async () => {
+    setIsBusy(true);
+    setFeedback(undefined);
+    try {
+      const result = await sendExtensionRequest({ type: "data.revokeOrigins" });
+      setGrantedOriginCount(result.remainingOriginCount);
+      setConfirmRevokeOrigins(false);
+      setFeedback({
+        kind: "success",
+        text: copy.providerAccessRevoked.replace("{count}", String(result.remainingOriginCount)),
+      });
     } catch {
       setFeedback({ kind: "error", text: copy.dataActionError });
     } finally {
@@ -245,6 +264,38 @@ export function PrivacyDataPanel({
           >
             <Trash size={15} aria-hidden="true" />
             {copy.deleteSavedKeys}
+          </button>
+        )}
+
+        {confirmRevokeOrigins ? (
+          <span className="inline-confirm">
+            <small>{copy.revokeOriginsConfirm}</small>
+            <button
+              type="button"
+              className="danger-button"
+              onClick={revokeOrigins}
+              disabled={isBusy}
+            >
+              {copy.confirmRevokeOrigins}
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={copy.cancelPromptEdit}
+              onClick={() => setConfirmRevokeOrigins(false)}
+            >
+              <X size={15} aria-hidden="true" />
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="history-delete-button"
+            onClick={() => setConfirmRevokeOrigins(true)}
+            disabled={grantedOriginCount === 0}
+          >
+            <ShieldCheck size={15} aria-hidden="true" />
+            {copy.revokeProviderAccess}
           </button>
         )}
 

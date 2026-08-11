@@ -12,12 +12,14 @@ import { createRequestId } from "../core/contracts/messages";
 import type {
   ContentType,
   GenerationInput,
+  GenerationIntent,
   GenerationResult,
   OutputLength,
+  RegenerationInput,
   SourceKind,
 } from "../core/generation/types";
 import type { ImageHistoryMetadata } from "../core/image/types";
-import { MAX_FILE_BYTES } from "../core/generation/validation";
+import { MAX_FILE_BYTES, MAX_SOURCE_CHARACTERS } from "../core/generation/validation";
 import {
   createDefaultPromptLibrary,
   type ResolvedPromptTemplate,
@@ -28,7 +30,11 @@ import type { ProviderProfile, SettingsSnapshot } from "../core/settings/types";
 import type { Messages } from "../i18n";
 import { loadCreateAdvancedOpen, saveCreateAdvancedOpen } from "../storage/create-ui-preferences";
 import { loadHistoryEnabled } from "../storage/history-preferences";
-import { saveHistoryRecord, updateHistoryMedia } from "../storage/history-repository";
+import {
+  saveHistoryRecord,
+  updateHistoryMedia,
+  updateHistoryResult,
+} from "../storage/history-repository";
 import { loadResolvedPromptLibrary } from "../storage/prompt-repository";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
 import { GenerationResults } from "./GenerationResults";
@@ -47,6 +53,7 @@ interface DraftForm {
   sourceKind: SourceKind;
   text: string;
   contentType: ContentType;
+  intent: GenerationIntent;
   languageValue: "follow-source" | "en" | "zh-CN" | "zh-TW" | "custom";
   customLanguage: string;
   styleId: string;
@@ -64,6 +71,7 @@ const initialForm: DraftForm = {
   sourceKind: "idea",
   text: "",
   contentType: "post",
+  intent: "agree-and-add",
   languageValue: "follow-source",
   customLanguage: "",
   styleId: "professional",
@@ -132,6 +140,7 @@ export function CreatePanel({
   const [rawHistorySaved, setRawHistorySaved] = useState(false);
   const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
   const [lastHistoryId, setLastHistoryId] = useState<string>();
+  const [regeneratingTarget, setRegeneratingTarget] = useState<string>();
   const activeRequestId = useRef<string | undefined>(undefined);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revisions are explicit reload signals.
@@ -178,6 +187,7 @@ export function CreatePanel({
       sourceKind: input.source.kind,
       text: input.source.text,
       contentType: input.contentType,
+      intent: input.intent ?? (input.contentType === "quote" ? "comment" : "agree-and-add"),
       languageValue,
       customLanguage: languageValue === "custom" ? (knownLanguage ?? "") : "",
       styleId: styles.some((style) => style.id === input.styleId)
@@ -196,7 +206,7 @@ export function CreatePanel({
     setLastGenerationInput(undefined);
     setLastHistoryId(undefined);
     setRawHistorySaved(false);
-    setError(undefined);
+    setError(input.source.text.length > MAX_SOURCE_CHARACTERS ? copy.sourceLengthError : undefined);
     setFileName(undefined);
   }, [historyDraft?.requestId]);
 
@@ -209,6 +219,12 @@ export function CreatePanel({
     setForm((current) => ({
       ...current,
       contentType,
+      intent:
+        contentType === "quote"
+          ? "comment"
+          : contentType === "reply"
+            ? "agree-and-add"
+            : current.intent,
       candidateCount: contentType === "thread" || contentType === "long-post" ? 1 : 3,
     }));
     setError(undefined);
@@ -238,6 +254,10 @@ export function CreatePanel({
 
     try {
       const text = await file.text();
+      if (text.length > MAX_SOURCE_CHARACTERS) {
+        setError(copy.sourceLengthError);
+        return;
+      }
       setForm((current) => ({ ...current, sourceKind: "file", text }));
       setFileName(file.name);
       setError(undefined);
@@ -249,6 +269,7 @@ export function CreatePanel({
   const buildInput = (): GenerationInput => ({
     source: { kind: form.sourceKind, text: form.text.trim() },
     contentType: form.contentType,
+    intent: form.contentType === "reply" || form.contentType === "quote" ? form.intent : undefined,
     language:
       form.languageValue === "follow-source"
         ? { mode: "follow-source" }
@@ -271,22 +292,10 @@ export function CreatePanel({
   const profile = snapshot ? getActiveProfile(snapshot) : undefined;
   const isConfigured = Boolean(profile?.model.trim() && snapshot?.activeSecretStatus.hasKey);
 
-  const generate = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!form.text.trim()) {
-      setError(copy.sourceRequired);
+  const performFullGeneration = async (generationInput: GenerationInput) => {
+    if (!profile) {
       return;
     }
-    if (form.languageValue === "custom" && !form.customLanguage.trim()) {
-      setError(copy.customLanguageRequired);
-      return;
-    }
-    if (!profile || !isConfigured) {
-      onOpenSettings();
-      return;
-    }
-    const generationInput = buildInput();
-
     let permissionPromise: Promise<boolean>;
     try {
       permissionPromise = requestProviderOriginPermission(profile.baseUrl);
@@ -297,7 +306,6 @@ export function CreatePanel({
 
     setIsGenerating(true);
     setError(undefined);
-    setLastHistoryId(undefined);
     const requestId = createRequestId();
     activeRequestId.current = requestId;
 
@@ -316,6 +324,7 @@ export function CreatePanel({
         { requestId },
       );
       if (activeRequestId.current === requestId) {
+        setLastHistoryId(undefined);
         setResult(generationResult);
         setLastGenerationInput(generationInput);
         setRawHistorySaved(false);
@@ -342,6 +351,134 @@ export function CreatePanel({
         activeRequestId.current = undefined;
         setIsGenerating(false);
       }
+    }
+  };
+
+  const generate = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!form.text.trim()) {
+      setError(copy.sourceRequired);
+      return;
+    }
+    if (form.text.length > MAX_SOURCE_CHARACTERS) {
+      setError(copy.sourceLengthError);
+      return;
+    }
+    if (form.languageValue === "custom" && !form.customLanguage.trim()) {
+      setError(copy.customLanguageRequired);
+      return;
+    }
+    if (!profile || !isConfigured) {
+      onOpenSettings();
+      return;
+    }
+    await performFullGeneration(buildInput());
+  };
+
+  const regenerateAll = async () => {
+    if (!profile || !isConfigured || !lastGenerationInput) {
+      onOpenSettings();
+      return;
+    }
+    if (lastGenerationInput.source.text.length > MAX_SOURCE_CHARACTERS) {
+      setError(copy.sourceLengthError);
+      return;
+    }
+    await performFullGeneration(lastGenerationInput);
+  };
+
+  const regenerateItem = async (target: RegenerationInput["target"]) => {
+    if (!profile || !isConfigured || !lastGenerationInput || !result) {
+      return;
+    }
+    let permissionPromise: Promise<boolean>;
+    try {
+      permissionPromise = requestProviderOriginPermission(profile.baseUrl);
+    } catch (permissionError) {
+      setError(getFriendlyError(permissionError, copy));
+      return;
+    }
+
+    const targetKey = `${target.kind}:${target.index}`;
+    setIsGenerating(true);
+    setRegeneratingTarget(targetKey);
+    setError(undefined);
+    const requestId = createRequestId();
+    activeRequestId.current = requestId;
+    try {
+      const allowed = await permissionPromise;
+      if (!allowed) {
+        throw Object.assign(new Error(copy.errorPermissionRequired), {
+          name: "HOST_PERMISSION_REQUIRED",
+        });
+      }
+      if (activeRequestId.current !== requestId) {
+        return;
+      }
+      const regenerated = await sendExtensionRequest(
+        {
+          type: "text.regenerate",
+          input: { input: lastGenerationInput, target },
+        },
+        { requestId },
+      );
+      if (activeRequestId.current !== requestId) {
+        return;
+      }
+      const nextResult: GenerationResult =
+        target.kind === "candidate" && result.format === "candidates"
+          ? {
+              ...result,
+              candidates: result.candidates.map((candidate, index) =>
+                index === target.index ? { ...candidate, text: regenerated.text } : candidate,
+              ),
+            }
+          : target.kind === "thread-post" && result.format === "thread"
+            ? {
+                ...result,
+                threads: result.threads.map((thread, threadIndex) =>
+                  threadIndex === 0
+                    ? {
+                        ...thread,
+                        posts: thread.posts.map((post, index) =>
+                          index === target.index ? { ...post, text: regenerated.text } : post,
+                        ),
+                      }
+                    : thread,
+                ),
+              }
+            : result;
+      setResult(nextResult);
+      if (lastHistoryId) {
+        try {
+          await updateHistoryResult(lastHistoryId, nextResult);
+          onHistoryChanged();
+        } catch {
+          setError(copy.historySaveError);
+        }
+      }
+    } catch (regenerationError) {
+      if (activeRequestId.current === requestId) {
+        setError(getFriendlyError(regenerationError, copy));
+      }
+    } finally {
+      if (activeRequestId.current === requestId) {
+        activeRequestId.current = undefined;
+        setIsGenerating(false);
+        setRegeneratingTarget(undefined);
+      }
+    }
+  };
+
+  const syncHistoryOnCopy = async (currentResult: GenerationResult) => {
+    if (!lastHistoryId) {
+      return;
+    }
+    try {
+      await updateHistoryResult(lastHistoryId, currentResult);
+      onHistoryChanged();
+    } catch {
+      setError(copy.historySaveError);
     }
   };
 
@@ -383,6 +520,7 @@ export function CreatePanel({
     }
     activeRequestId.current = undefined;
     setIsGenerating(false);
+    setRegeneratingTarget(undefined);
     setError(copy.generationCancelled);
     void sendExtensionRequest({ type: "text.cancel", targetRequestId }).catch(() => undefined);
   };
@@ -449,7 +587,6 @@ export function CreatePanel({
             }}
             placeholder={copy.sourcePlaceholder}
             rows={7}
-            maxLength={100_000}
             disabled={isGenerating}
           />
         </label>
@@ -517,6 +654,34 @@ export function CreatePanel({
                 maxLength={80}
                 disabled={isGenerating}
               />
+            </label>
+          ) : null}
+
+          {form.contentType === "reply" || form.contentType === "quote" ? (
+            <label className="form-field field-wide">
+              <span>{copy.intentLabel}</span>
+              <select
+                value={form.intent}
+                onChange={(event) => updateForm("intent", event.target.value as GenerationIntent)}
+                disabled={isGenerating}
+              >
+                {form.contentType === "reply" ? (
+                  <>
+                    <option value="agree-and-add">{copy.replyIntentAgreeAndAdd}</option>
+                    <option value="respectful-disagree">
+                      {copy.replyIntentRespectfulDisagree}
+                    </option>
+                    <option value="question">{copy.replyIntentQuestion}</option>
+                    <option value="humorous">{copy.replyIntentHumorous}</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="comment">{copy.quoteIntentComment}</option>
+                    <option value="summarize">{copy.quoteIntentSummarize}</option>
+                    <option value="extend">{copy.quoteIntentExtend}</option>
+                  </>
+                )}
+              </select>
             </label>
           ) : null}
 
@@ -677,6 +842,11 @@ export function CreatePanel({
           settingsSnapshot={snapshot}
           onOpenSettings={onOpenSettings}
           onImageGenerated={saveImageMetadata}
+          onCopied={syncHistoryOnCopy}
+          onRegenerateAll={regenerateAll}
+          onRegenerateItem={regenerateItem}
+          regeneratingTarget={regeneratingTarget}
+          isRegenerating={isGenerating}
         />
       ) : null}
     </div>
