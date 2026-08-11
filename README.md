@@ -12,12 +12,12 @@ The current implementation contains:
 - English and Simplified Chinese interface loading.
 - A persisted interface language preference.
 - Background and X content-script entry boundaries.
-- Versioned local settings and provider profiles.
+- Versioned local settings with one text Provider configuration and one image Provider configuration.
 - Session-only or opt-in persistent API key storage, restricted to trusted extension contexts.
 - Runtime-validated messages with a trusted-sender guard.
 - Exact, user-triggered Provider origin permissions.
 - Quick and Advanced model settings for OpenAI-compatible, Anthropic, Gemini, and xAI.
-- A local-only setup check that sends no Provider request.
+- A live setup check that sends only fixed synthetic text and no draft, history, or custom prompt.
 - A default Create workflow for posts, replies, quotes, threads, and Premium long posts.
 - Independent output-language, built-in style, length, audience, goal, and tone controls.
 - Direct BYOK text generation through OpenAI-compatible Chat Completions, Anthropic Messages,
@@ -40,7 +40,7 @@ The current implementation contains:
 - X DOM observation is batched and idempotent, with cleanup for virtual-list node removal.
 - Content-script messages are limited to inline bootstrap/generation/cancel/open operations;
   Provider keys stay in trusted extension contexts.
-- Settings schema v2 keeps image Provider profiles and secrets separate from text generation while
+- Settings schema v2 keeps the image Provider configuration and secret separate from text generation while
   migrating existing schema v1 settings without losing the active text profile.
 - Editable image prompts can be created from a candidate, one Thread post, or raw fallback text,
   with visual style, aspect ratio, resolution, and optional in-image text controls.

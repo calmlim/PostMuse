@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 
 const profileIndex = process.argv.indexOf("--profile");
 const profile = profileIndex >= 0 ? process.argv[profileIndex + 1] : "development";
@@ -8,6 +8,7 @@ if (profile !== "development" && profile !== "store") {
 }
 
 const root = "dist";
+const toPackagePath = (file) => relative(root, file).split(sep).join("/");
 const manifest = JSON.parse(await readFile(join(root, "manifest.json"), "utf8"));
 const failures = [];
 const assert = (condition, message) => {
@@ -42,7 +43,7 @@ const collectFiles = async (directory) => {
 };
 
 const files = await collectFiles(root);
-const names = new Set(files.map((file) => relative(root, file)));
+const names = new Set(files.map(toPackagePath));
 for (const required of [
   "manifest.json",
   "sidepanel.html",
@@ -84,13 +85,13 @@ for (const file of files) {
   const text = await readFile(file, "utf8");
   for (const pattern of secretPatterns) {
     pattern.lastIndex = 0;
-    assert(!pattern.test(text), `possible secret in ${relative(root, file)}`);
+    assert(!pattern.test(text), `possible secret in ${toPackagePath(file)}`);
   }
   if (extension === ".html") {
-    assert(!/<script[^>]+src=["']https?:/i.test(text), `remote script in ${relative(root, file)}`);
+    assert(!/<script[^>]+src=["']https?:/i.test(text), `remote script in ${toPackagePath(file)}`);
     assert(
       !/<link[^>]+rel=["']stylesheet["'][^>]+href=["']https?:/i.test(text),
-      `remote stylesheet in ${relative(root, file)}`,
+      `remote stylesheet in ${toPackagePath(file)}`,
     );
   }
 }
