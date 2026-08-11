@@ -1,0 +1,90 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createGenerationInputFixture } from "../core/generation/fixtures";
+import type { GenerationResult } from "../core/generation/types";
+import {
+  clearHistoryRecords,
+  deleteHistoryRecord,
+  listHistoryRecords,
+  saveHistoryRecord,
+  updateHistoryResult,
+} from "./history-repository";
+
+const resultFixture = (text: string): GenerationResult => ({
+  format: "candidates",
+  contentType: "post",
+  candidates: [{ id: "candidate-1", text }],
+  warnings: [],
+  provider: "openai-compatible",
+  model: "test-model",
+  softCharacterLimit: 280,
+});
+
+beforeEach(() => {
+  let id = 0;
+  vi.stubGlobal("crypto", { randomUUID: () => `history-test-${++id}` });
+});
+
+describe("history repository", () => {
+  it("keeps the newest 100 records transactionally", async () => {
+    for (let index = 0; index < 101; index += 1) {
+      await saveHistoryRecord(
+        createGenerationInputFixture({
+          source: { kind: "idea", text: `Idea ${index}` },
+          candidateCount: 1,
+        }),
+        resultFixture(`Result ${index}`),
+        { recipeVersion: 1, styleTemplateVersion: 1, now: new Date(index * 1_000) },
+      );
+    }
+
+    const records = await listHistoryRecords();
+    expect(records).toHaveLength(100);
+    expect(records[0].input.source.text).toBe("Idea 100");
+    expect(records.at(-1)?.input.source.text).toBe("Idea 1");
+  });
+
+  it("persists edits across database reopen and sorts by updatedAt", async () => {
+    const first = await saveHistoryRecord(
+      createGenerationInputFixture({ candidateCount: 1 }),
+      resultFixture("Original"),
+      { recipeVersion: 1, styleTemplateVersion: 1, now: new Date(1_000) },
+    );
+    await saveHistoryRecord(
+      createGenerationInputFixture({
+        source: { kind: "idea", text: "Second idea" },
+        candidateCount: 1,
+      }),
+      resultFixture("Second"),
+      { recipeVersion: 1, styleTemplateVersion: 1, now: new Date(2_000) },
+    );
+
+    await updateHistoryResult(first.id, resultFixture("Edited"), new Date(3_000));
+    const records = await listHistoryRecords();
+
+    expect(records[0]).toMatchObject({
+      id: first.id,
+      result: { candidates: [{ text: "Edited" }] },
+    });
+  });
+
+  it("deletes one record or clears the store", async () => {
+    const first = await saveHistoryRecord(
+      createGenerationInputFixture({ candidateCount: 1 }),
+      resultFixture("First"),
+      { recipeVersion: 1, styleTemplateVersion: 1 },
+    );
+    await saveHistoryRecord(
+      createGenerationInputFixture({
+        source: { kind: "idea", text: "Second idea" },
+        candidateCount: 1,
+      }),
+      resultFixture("Second"),
+      { recipeVersion: 1, styleTemplateVersion: 1 },
+    );
+
+    await deleteHistoryRecord(first.id);
+    expect(await listHistoryRecords()).toHaveLength(1);
+    await clearHistoryRecords();
+    expect(await listHistoryRecords()).toEqual([]);
+  });
+});

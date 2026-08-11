@@ -49,8 +49,10 @@ textarea {
 .app-shell {
   display: grid;
   width: 100%;
+  height: 100dvh;
   min-width: 0;
   min-height: 100dvh;
+  overflow: hidden;
   grid-template-rows: auto 1fr auto;
   background: var(--canvas);
 }
@@ -169,6 +171,8 @@ textarea {
 .app-main {
   display: grid;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   place-items: center;
   padding: 28px 18px;
 }
@@ -184,6 +188,11 @@ textarea {
 }
 
 .app-main[data-view="prompts"] {
+  display: block;
+  padding: 24px 16px 32px;
+}
+
+.app-main[data-view="history"] {
   display: block;
   padding: 24px 16px 32px;
 }
@@ -249,7 +258,7 @@ textarea {
   min-height: 58px;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 5px;
   padding: 7px 12px;
   border-top: 1px solid var(--border);
   background: var(--surface);
@@ -257,12 +266,12 @@ textarea {
 
 .app-nav > button {
   display: flex;
-  min-width: 72px;
+  min-width: 0;
   min-height: 42px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 7px 12px;
+  gap: 5px;
+  padding: 7px 6px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -915,6 +924,18 @@ textarea {
   color: var(--accent);
 }
 
+.copy-button:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.result-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
 .copy-all-button {
   justify-self: end;
 }
@@ -1170,6 +1191,229 @@ textarea {
   line-height: 1.4;
 }
 
+.history-panel {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.history-controls,
+.history-editor,
+.history-empty,
+.history-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-strong);
+}
+
+.history-controls {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  padding: 15px;
+  box-shadow: var(--shadow);
+}
+
+.history-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.history-toggle input {
+  width: 17px;
+  height: 17px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.history-toggle > span {
+  display: grid;
+  gap: 3px;
+}
+
+.history-toggle strong,
+.history-search > span:first-child {
+  font-size: 11px;
+  font-weight: 690;
+}
+
+.history-toggle small,
+.history-disabled-note {
+  color: var(--text-muted);
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
+.history-disabled-note {
+  margin: -6px 0 0 27px;
+}
+
+.history-search {
+  display: grid;
+  gap: 7px;
+}
+
+.history-search-input {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.history-search-input:focus-within {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 14%, transparent);
+}
+
+.history-search-input input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.history-list {
+  display: grid;
+  gap: 11px;
+  margin-top: 16px;
+}
+
+.history-card {
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+}
+
+.history-card-heading,
+.history-editor-heading,
+.history-editor-actions,
+.history-clear-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-card-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.history-card-heading strong,
+.history-editor-heading strong {
+  font-size: 12px;
+}
+
+.history-card-heading > div > span {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.history-preview {
+  min-width: 0;
+}
+
+.history-preview > span {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.history-preview p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.history-actions .secondary-button {
+  min-height: 33px;
+  padding: 6px 8px;
+  font-size: 9.5px;
+}
+
+.history-delete-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a23327;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 680;
+}
+
+.history-delete-button:hover {
+  background: #fff0ee;
+}
+
+.history-editor {
+  margin-top: 16px;
+  padding: 15px;
+}
+
+.history-editor .results-section {
+  margin-top: 12px;
+  padding-top: 14px;
+}
+
+.history-editor-actions {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.history-empty {
+  margin-top: 16px;
+  padding: 22px 18px;
+  text-align: center;
+}
+
+.history-empty strong {
+  font-size: 12px;
+}
+
+.history-empty p {
+  margin: 5px auto 0;
+  max-width: 48ch;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.history-clear-row {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 @media (max-width: 480px) {
   .brand-tagline {
     display: none;
@@ -1239,6 +1483,14 @@ textarea {
   .danger-button {
     background: #3c2424;
     color: #ffb5aa;
+  }
+
+  .history-delete-button {
+    color: #ffb5aa;
+  }
+
+  .history-delete-button:hover {
+    background: #3c2424;
   }
 }
 

@@ -1,18 +1,32 @@
-import { GearSix, MagicWand, PencilSimple, Sparkle } from "@phosphor-icons/react";
+import {
+  ClockCounterClockwise,
+  GearSix,
+  MagicWand,
+  PencilSimple,
+  Sparkle,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import { createRequestId } from "../core/contracts/messages";
+import type { GenerationInput } from "../core/generation/types";
 import { DEFAULT_LOCALE, getMessages, type Locale } from "../i18n";
 import { loadUiLocale, saveUiLocale } from "../storage/locale-storage";
 import { SettingsPanel } from "./SettingsPanel";
 import { CreatePanel } from "./CreatePanel";
+import { HistoryPanel } from "./HistoryPanel";
 import { PromptsPanel } from "./PromptsPanel";
 
 const localeOptions: Locale[] = ["en", "zh-CN"];
 
 export function App() {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
-  const [view, setView] = useState<"create" | "prompts" | "settings">("create");
+  const [view, setView] = useState<"create" | "history" | "prompts" | "settings">("create");
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [promptRevision, setPromptRevision] = useState(0);
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const [historyDraft, setHistoryDraft] = useState<{
+    requestId: string;
+    input: GenerationInput;
+  }>();
   const copy = getMessages(locale);
 
   useEffect(() => {
@@ -32,6 +46,11 @@ export function App() {
   const selectLocale = (nextLocale: Locale) => {
     setLocale(nextLocale);
     void saveUiLocale(nextLocale);
+  };
+
+  const reuseHistoryInput = (input: GenerationInput) => {
+    setHistoryDraft({ requestId: createRequestId(), input });
+    setView("create");
   };
 
   return (
@@ -71,8 +90,20 @@ export function App() {
             onOpenSettings={() => setView("settings")}
             settingsRevision={settingsRevision}
             promptRevision={promptRevision}
+            historyRevision={historyRevision}
+            historyDraft={historyDraft}
+            onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)}
           />
         </div>
+        {view === "history" ? (
+          <HistoryPanel
+            copy={copy}
+            locale={locale}
+            revision={historyRevision}
+            onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)}
+            onReuseInput={reuseHistoryInput}
+          />
+        ) : null}
         <div hidden={view !== "prompts"}>
           <PromptsPanel
             copy={copy}
@@ -91,6 +122,10 @@ export function App() {
         <button type="button" data-active={view === "create"} onClick={() => setView("create")}>
           <PencilSimple size={18} weight={view === "create" ? "fill" : "regular"} />
           <span>{copy.createNav}</span>
+        </button>
+        <button type="button" data-active={view === "history"} onClick={() => setView("history")}>
+          <ClockCounterClockwise size={18} weight={view === "history" ? "fill" : "regular"} />
+          <span>{copy.historyNav}</span>
         </button>
         <button type="button" data-active={view === "prompts"} onClick={() => setView("prompts")}>
           <MagicWand size={18} weight={view === "prompts" ? "fill" : "regular"} />

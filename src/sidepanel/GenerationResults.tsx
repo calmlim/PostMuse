@@ -1,4 +1,4 @@
-import { Check, Copy, WarningCircle } from "@phosphor-icons/react";
+import { Archive, Check, Copy, WarningCircle } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { GenerationResult } from "../core/generation/types";
 import type { Messages } from "../i18n";
@@ -7,11 +7,19 @@ interface GenerationResultsProps {
   copy: Messages;
   result: GenerationResult;
   onChange: (result: GenerationResult) => void;
+  onSaveRaw?: () => void;
+  rawHistorySaved?: boolean;
 }
 
 const countCharacters = (value: string): number => Array.from(value).length;
 
-export function GenerationResults({ copy, result, onChange }: GenerationResultsProps) {
+export function GenerationResults({
+  copy,
+  result,
+  onChange,
+  onSaveRaw,
+  rawHistorySaved = false,
+}: GenerationResultsProps) {
   const [copyStatus, setCopyStatus] = useState<string>();
 
   const copyText = async (text: string, status: string) => {
@@ -169,14 +177,27 @@ export function GenerationResults({ copy, result, onChange }: GenerationResultsP
             onChange={(event) => onChange({ ...result, rawText: event.target.value })}
             rows={10}
           />
-          <button
-            type="button"
-            className="copy-button"
-            onClick={() => copyText(result.rawText, copy.copiedCandidate)}
-          >
-            <Copy size={16} weight="bold" aria-hidden="true" />
-            {copy.copyText}
-          </button>
+          <div className="result-card-actions">
+            {onSaveRaw ? (
+              <button
+                type="button"
+                className="copy-button"
+                onClick={onSaveRaw}
+                disabled={rawHistorySaved}
+              >
+                <Archive size={16} weight="bold" aria-hidden="true" />
+                {rawHistorySaved ? copy.savedToHistory : copy.saveToHistory}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="copy-button"
+              onClick={() => copyText(result.rawText, copy.copiedCandidate)}
+            >
+              <Copy size={16} weight="bold" aria-hidden="true" />
+              {copy.copyText}
+            </button>
+          </div>
         </article>
       ) : null}
 

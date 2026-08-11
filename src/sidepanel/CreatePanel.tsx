@@ -22,9 +22,12 @@ import {
   type ResolvedPromptTemplate,
   resolvePromptLibrary,
 } from "../core/prompts/library";
+import { PROMPT_RECIPE_VERSION } from "../core/prompts/prompt-builder";
 import type { ProviderProfile, SettingsSnapshot } from "../core/settings/types";
 import type { Messages } from "../i18n";
 import { loadCreateAdvancedOpen, saveCreateAdvancedOpen } from "../storage/create-ui-preferences";
+import { loadHistoryEnabled } from "../storage/history-preferences";
+import { saveHistoryRecord } from "../storage/history-repository";
 import { loadResolvedPromptLibrary } from "../storage/prompt-repository";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
 import { GenerationResults } from "./GenerationResults";
@@ -34,6 +37,9 @@ interface CreatePanelProps {
   onOpenSettings: () => void;
   settingsRevision: number;
   promptRevision: number;
+  historyRevision: number;
+  historyDraft?: { requestId: string; input: GenerationInput };
+  onHistoryChanged: () => void;
 }
 
 interface DraftForm {
@@ -109,6 +115,9 @@ export function CreatePanel({
   onOpenSettings,
   settingsRevision,
   promptRevision,
+  historyRevision,
+  historyDraft,
+  onHistoryChanged,
 }: CreatePanelProps) {
   const [form, setForm] = useState<DraftForm>(initialForm);
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
@@ -118,6 +127,9 @@ export function CreatePanel({
   const [error, setError] = useState<string>();
   const [fileName, setFileName] = useState<string>();
   const [styles, setStyles] = useState<ResolvedPromptTemplate[]>(defaultActiveStyles);
+  const [historyEnabled, setHistoryEnabled] = useState(true);
+  const [rawHistorySaved, setRawHistorySaved] = useState(false);
+  const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
   const activeRequestId = useRef<string | undefined>(undefined);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revisions are explicit reload signals.
@@ -127,11 +139,13 @@ export function CreatePanel({
       sendExtensionRequest({ type: "settings.get" }).catch(() => undefined),
       loadCreateAdvancedOpen(),
       loadResolvedPromptLibrary(),
-    ]).then(([settingsSnapshot, storedAdvancedOpen, promptLibrary]) => {
+      loadHistoryEnabled(),
+    ]).then(([settingsSnapshot, storedAdvancedOpen, promptLibrary, storedHistoryEnabled]) => {
       if (active) {
         setSnapshot(settingsSnapshot);
         setAdvancedOpen(storedAdvancedOpen);
         setStyles(promptLibrary.active);
+        setHistoryEnabled(storedHistoryEnabled);
         setForm((current) =>
           promptLibrary.active.some((style) => style.id === current.styleId)
             ? current
@@ -143,7 +157,45 @@ export function CreatePanel({
     return () => {
       active = false;
     };
-  }, [settingsRevision, promptRevision]);
+  }, [settingsRevision, promptRevision, historyRevision]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The request id is the one-shot draft transfer signal.
+  useEffect(() => {
+    if (!historyDraft) {
+      return;
+    }
+    const { input } = historyDraft;
+    const knownLanguage = input.language.value;
+    const languageValue: DraftForm["languageValue"] =
+      input.language.mode === "follow-source"
+        ? "follow-source"
+        : knownLanguage === "en" || knownLanguage === "zh-CN" || knownLanguage === "zh-TW"
+          ? knownLanguage
+          : "custom";
+    setForm({
+      sourceKind: input.source.kind,
+      text: input.source.text,
+      contentType: input.contentType,
+      languageValue,
+      customLanguage: languageValue === "custom" ? (knownLanguage ?? "") : "",
+      styleId: styles.some((style) => style.id === input.styleId)
+        ? input.styleId
+        : (styles[0]?.id ?? "professional"),
+      length: input.length,
+      audience: input.audience ?? "",
+      goal: input.goal ?? "",
+      tone: input.tone ?? "",
+      mustInclude: input.mustInclude ?? "",
+      mustAvoid: input.mustAvoid ?? "",
+      candidateCount: input.candidateCount,
+      threadCount: input.threadCount ?? 5,
+    });
+    setResult(undefined);
+    setLastGenerationInput(undefined);
+    setRawHistorySaved(false);
+    setError(undefined);
+    setFileName(undefined);
+  }, [historyDraft?.requestId]);
 
   const updateForm = <K extends keyof DraftForm>(key: K, value: DraftForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -261,6 +313,20 @@ export function CreatePanel({
       );
       if (activeRequestId.current === requestId) {
         setResult(generationResult);
+        setLastGenerationInput(generationInput);
+        setRawHistorySaved(false);
+        if (historyEnabled && generationResult.format !== "raw") {
+          try {
+            await saveHistoryRecord(generationInput, generationResult, {
+              recipeVersion: PROMPT_RECIPE_VERSION,
+              styleTemplateVersion:
+                styles.find((style) => style.id === generationInput.styleId)?.version ?? 1,
+            });
+            onHistoryChanged();
+          } catch {
+            setError(copy.historySaveError);
+          }
+        }
       }
     } catch (generationError) {
       if (activeRequestId.current === requestId) {
@@ -271,6 +337,24 @@ export function CreatePanel({
         activeRequestId.current = undefined;
         setIsGenerating(false);
       }
+    }
+  };
+
+  const saveRawResult = async () => {
+    if (!historyEnabled || result?.format !== "raw" || !lastGenerationInput) {
+      return;
+    }
+    try {
+      await saveHistoryRecord(lastGenerationInput, result, {
+        recipeVersion: PROMPT_RECIPE_VERSION,
+        styleTemplateVersion:
+          styles.find((style) => style.id === lastGenerationInput.styleId)?.version ?? 1,
+      });
+      setRawHistorySaved(true);
+      setError(undefined);
+      onHistoryChanged();
+    } catch {
+      setError(copy.historySaveError);
     }
   };
 
@@ -548,7 +632,15 @@ export function CreatePanel({
         </p>
       </form>
 
-      {result ? <GenerationResults copy={copy} result={result} onChange={setResult} /> : null}
+      {result ? (
+        <GenerationResults
+          copy={copy}
+          result={result}
+          onChange={setResult}
+          onSaveRaw={historyEnabled && result.format === "raw" ? saveRawResult : undefined}
+          rawHistorySaved={rawHistorySaved}
+        />
+      ) : null}
     </div>
   );
 }

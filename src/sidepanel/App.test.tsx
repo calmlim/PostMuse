@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createGenerationInputFixture } from "../core/generation/fixtures";
 import { createDefaultSettings } from "../core/settings/defaults";
+import { HISTORY_PREFERENCES_STORAGE_KEY } from "../storage/history-preferences";
+import { listHistoryRecords, saveHistoryRecord } from "../storage/history-repository";
 import { App } from "./App";
 
 const storageGet = vi.fn();
@@ -218,6 +221,107 @@ describe("Side Panel App", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Copy" })[0]);
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("First useful draft"));
     expect(screen.getByText("Copied to clipboard.")).toBeVisible();
+    await waitFor(async () => expect(await listHistoryRecords()).toHaveLength(1));
+  });
+
+  it("saves raw fallback text only after explicit confirmation", async () => {
+    const settings = createDefaultSettings();
+    settings.textProviderProfiles[0] = {
+      ...settings.textProviderProfiles[0],
+      model: "gpt-test",
+    };
+    runtimeSendMessage.mockImplementation(async (request: { type: string }) => {
+      if (request.type === "settings.get") {
+        return {
+          ok: true,
+          data: {
+            settings,
+            activeSecretStatus: { hasKey: true, persistence: "session" },
+          },
+        };
+      }
+      if (request.type === "text.generate") {
+        return {
+          ok: true,
+          data: {
+            format: "raw",
+            contentType: "post",
+            rawText: "Provider fallback text",
+            warnings: ["RAW_TEXT_FALLBACK"],
+            provider: "openai-compatible",
+            model: "gpt-test",
+            softCharacterLimit: 280,
+          },
+        };
+      }
+      return { ok: true, data: { cancelled: true } };
+    });
+
+    render(<App />);
+    await screen.findByText(/Generate sends this draft directly/);
+    fireEvent.change(screen.getByLabelText("Your idea or draft"), {
+      target: { value: "Fallback source" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(await screen.findByLabelText("Raw Provider result")).toHaveValue(
+      "Provider fallback text",
+    );
+    expect(await listHistoryRecords()).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Save to history" }));
+    await waitFor(async () => expect(await listHistoryRecords()).toHaveLength(1));
+    expect(screen.getByRole("button", { name: "Saved to history" })).toBeDisabled();
+  });
+
+  it("does not save a successful result when local history is disabled", async () => {
+    storageGet.mockImplementation(async (key?: string) =>
+      key === HISTORY_PREFERENCES_STORAGE_KEY
+        ? {
+            [HISTORY_PREFERENCES_STORAGE_KEY]: { schemaVersion: 1, enabled: false },
+          }
+        : {},
+    );
+    const settings = createDefaultSettings();
+    settings.textProviderProfiles[0] = {
+      ...settings.textProviderProfiles[0],
+      model: "gpt-test",
+    };
+    runtimeSendMessage.mockImplementation(async (request: { type: string }) => {
+      if (request.type === "settings.get") {
+        return {
+          ok: true,
+          data: {
+            settings,
+            activeSecretStatus: { hasKey: true, persistence: "session" },
+          },
+        };
+      }
+      if (request.type === "text.generate") {
+        return {
+          ok: true,
+          data: {
+            format: "candidates",
+            contentType: "post",
+            candidates: [{ id: "candidate-1", text: "Unsaved result" }],
+            warnings: [],
+            provider: "openai-compatible",
+            model: "gpt-test",
+            softCharacterLimit: 280,
+          },
+        };
+      }
+      return { ok: true, data: { cancelled: true } };
+    });
+
+    render(<App />);
+    await screen.findByText(/Generate sends this draft directly/);
+    fireEvent.change(screen.getByLabelText("Your idea or draft"), {
+      target: { value: "Do not save this" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(await screen.findByLabelText("Candidate 1")).toHaveValue("Unsaved result");
+    expect(await listHistoryRecords()).toEqual([]);
   });
 
   it("reads a local Markdown file into the draft without uploading it", async () => {
@@ -251,6 +355,39 @@ describe("Side Panel App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(screen.getByLabelText("Your idea or draft")).toHaveValue("Keep this local draft");
+  });
+
+  it("reuses a history input in Create without calling the Provider", async () => {
+    await saveHistoryRecord(
+      createGenerationInputFixture({
+        source: { kind: "draft", text: "Reuse this saved source" },
+        contentType: "quote",
+        candidateCount: 2,
+      }),
+      {
+        format: "candidates",
+        contentType: "quote",
+        candidates: [{ id: "candidate-1", text: "Saved output" }],
+        warnings: [],
+        provider: "openai-compatible",
+        model: "test-model",
+        softCharacterLimit: 280,
+      },
+      { recipeVersion: 1, styleTemplateVersion: 1 },
+    );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    expect(await screen.findByText("Reuse this saved source")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Reuse in Create" }));
+
+    expect(await screen.findByLabelText("Your idea or draft")).toHaveValue(
+      "Reuse this saved source",
+    );
+    expect(screen.getByLabelText("Format")).toHaveValue("quote");
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "text.generate" }),
+    );
   });
 
   it("makes a newly saved custom style available in Create", async () => {
