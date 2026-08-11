@@ -8,6 +8,6 @@ describe("localization catalog", () => {
 
   it("uses English as the default interface language", () => {
     expect(DEFAULT_LOCALE).toBe("en");
-    expect(getMessages(DEFAULT_LOCALE).createTitle).toBe("Turn an idea into a post");
+    expect(getMessages(DEFAULT_LOCALE).createTitle).toBe("Create");
   });
 });

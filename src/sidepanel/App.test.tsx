@@ -84,7 +84,7 @@ describe("Side Panel App", () => {
   it("renders English by default", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "Turn an idea into a post" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Create" })).toBeVisible();
     expect(screen.getByRole("group", { name: "Interface language" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Prompts" })).toBeVisible();
   });
@@ -94,7 +94,7 @@ describe("Side Panel App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "中文" }));
 
-    expect(screen.getByRole("heading", { name: "把想法变成推文" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "创作" })).toBeVisible();
     expect(screen.getByRole("group", { name: "界面语言" })).toBeVisible();
     await waitFor(() =>
       expect(storageSet).toHaveBeenCalledWith({
@@ -108,7 +108,7 @@ describe("Side Panel App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "把想法变成推文" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "创作" })).toBeVisible();
   });
 
   it("runs the live connection test in permission-first order", async () => {
@@ -217,7 +217,7 @@ describe("Side Panel App", () => {
       target: { value: "A useful product lesson" },
     });
     order.length = 0;
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
 
     expect(await screen.findByRole("heading", { name: "Edit before you publish" })).toBeVisible();
     expect(order).toEqual(["permission", "text.generate"]);
@@ -267,7 +267,7 @@ describe("Side Panel App", () => {
     fireEvent.change(screen.getByLabelText("Your idea or draft"), {
       target: { value: "Fallback source" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
 
     expect(await screen.findByLabelText("Raw Provider result")).toHaveValue(
       "Provider fallback text",
@@ -323,7 +323,7 @@ describe("Side Panel App", () => {
     fireEvent.change(screen.getByLabelText("Your idea or draft"), {
       target: { value: "Do not save this" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
 
     expect(await screen.findByLabelText("Candidate 1")).toHaveValue("Unsaved result");
     expect(await listHistoryRecords()).toEqual([]);
@@ -354,7 +354,7 @@ describe("Side Panel App", () => {
     render(<App />);
     const source = await screen.findByLabelText("Your idea or draft");
     fireEvent.change(source, { target: { value: "x".repeat(100_001) } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
     expect(
       screen.getByText(
         "The source is longer than 100,000 characters. Shorten it before generating.",
@@ -408,7 +408,10 @@ describe("Side Panel App", () => {
     expect(await screen.findByLabelText("Your idea or draft")).toHaveValue(
       "Reuse this saved source",
     );
-    expect(screen.getByLabelText("Format")).toHaveValue("quote");
+    expect(screen.getByRole("button", { name: "Quote post" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(runtimeSendMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "text.generate" }),
     );
@@ -437,7 +440,7 @@ describe("Side Panel App", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Your idea or draft")).toHaveValue("Context handed off from X"),
     );
-    expect(screen.getByLabelText("Format")).toHaveValue("reply");
+    expect(screen.getByRole("button", { name: "Reply" })).toHaveAttribute("aria-pressed", "true");
     expect(sessionRemove).toHaveBeenCalledWith(PENDING_X_CONTEXT_STORAGE_KEY);
   });
 

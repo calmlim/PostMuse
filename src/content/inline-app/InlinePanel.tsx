@@ -19,48 +19,61 @@ const panelStyles = `
   :host { all: initial; color-scheme: light dark; }
   * { box-sizing: border-box; }
   button, select, textarea, input { font: inherit; }
-  .panel { margin: 10px 0 4px; padding: 16px; border: 1px solid #d9e0e9; border-radius: 16px; background: #fff; color: #172033; box-shadow: 0 12px 36px rgba(22,34,55,.12); font: 13px/1.45 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-  .heading, .actions, .result-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
-  .icon { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 9px; background: transparent; color: #667085; cursor: pointer; }
-  .icon:hover { background: #eef3ff; color: #315fca; }
-  .source { margin: 12px 0 0; padding: 10px 11px; border-radius: 11px; background: #f5f7fa; }
-  .source strong, label > span, fieldset legend { display: block; margin-bottom: 5px; font-size: 10px; font-weight: 700; }
-  .source p { display: -webkit-box; margin: 0; overflow: hidden; color: #596579; font-size: 11px; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-  .context { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; color: #354052; font-size: 10.5px; cursor: pointer; }
+  .panel { margin: 12px 0 6px; overflow: hidden; border: 1px solid #deddd6; border-radius: 14px; background: #fdfcf9; color: #171816; box-shadow: 0 12px 32px rgba(35,34,29,.09); font: 13px/1.45 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  .heading, .actions, .result-heading, .brand-heading, .result-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .heading { padding: 14px 16px; border-bottom: 1px solid #e5e3dc; }
+  .brand-heading { justify-content: flex-start; min-width: 0; }
+  .brand-spark { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; color: #ee763b; }
+  .brand-copy { display: grid; min-width: 0; gap: 1px; }
+  .brand-copy strong { font-size: 15px; font-weight: 780; letter-spacing: -.025em; }
+  .brand-copy span { color: #6d6c62; font-size: 10.5px; }
+  .icon { display: grid; width: 38px; height: 38px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #77766e; cursor: pointer; }
+  .icon:hover { background: #edf2ff; color: #315fd0; }
+  .workspace { padding: 14px 16px 2px; }
+  .source { margin: 0; padding: 0 0 13px; border-bottom: 1px solid #e5e3dc; }
+  .source + .source { padding-top: 12px; }
+  .source strong, label > span, fieldset legend { display: block; margin-bottom: 6px; font-size: 10.5px; font-weight: 700; }
+  .source p { display: -webkit-box; margin: 0; overflow: hidden; color: #5f5e57; font-size: 12px; line-height: 1.5; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .context { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; color: #41413c; font-size: 10.5px; cursor: pointer; }
   .context input { margin-top: 2px; accent-color: #315fca; }
   .context span { display: grid; gap: 2px; }
-  .context small { color: #667085; font-size: 9px; }
-  fieldset { display: flex; gap: 6px; margin: 12px 0 0; padding: 0; border: 0; }
-  .choice { flex: 1; min-height: 34px; border: 1px solid #d9e0e9; border-radius: 9px; background: #fff; color: #596579; cursor: pointer; font-size: 10px; font-weight: 680; }
-  .choice[data-active="true"] { border-color: #315fca; background: #eaf0ff; color: #315fca; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
-  label select { width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid #d9e0e9; border-radius: 9px; background: #fff; color: #172033; font-size: 10.5px; }
-  .actions { justify-content: flex-end; margin-top: 13px; }
-  .primary, .secondary { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 6px; padding: 8px 11px; border-radius: 9px; cursor: pointer; font-size: 10.5px; font-weight: 700; }
-  .primary { border: 1px solid #315fca; background: #315fca; color: #fff; }
-  .secondary { border: 1px solid #d9e0e9; background: #fff; color: #354052; }
+  .context small { color: #77766e; font-size: 9.5px; }
+  fieldset { display: flex; gap: 0; margin: 13px 0 0; padding: 0; overflow: hidden; border: 1px solid #cbc9c0; border-radius: 9px; }
+  fieldset legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+  .choice { flex: 1; min-height: 42px; border: 0; border-right: 1px solid #deddd6; background: #fffdfa; color: #5f5e57; cursor: pointer; font-size: 11px; font-weight: 680; }
+  .choice:last-child { border-right: 0; }
+  .choice[data-active="true"] { background: #edf2ff; color: #315fd0; box-shadow: inset 0 0 0 1px #315fd0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 13px; }
+  label select { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #cbc9c0; border-radius: 9px; background: #fffdfa; color: #171816; font-size: 11px; }
+  .actions { justify-content: flex-end; margin-top: 13px; padding: 0 16px 14px; }
+  .primary, .secondary, .text-button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; border-radius: 9px; cursor: pointer; font-size: 11px; font-weight: 700; }
+  .primary { min-width: 142px; border: 1px solid #315fd0; background: #315fd0; color: #fff; }
+  .secondary { border: 0; background: transparent; color: #315fd0; }
+  .text-button { width: 100%; border: 0; border-radius: 0; background: transparent; color: #315fd0; }
   .primary:disabled { cursor: wait; opacity: .62; }
-  .notice, .error { display: flex; align-items: flex-start; gap: 7px; margin-top: 12px; padding: 10px; border-radius: 10px; font-size: 10px; }
+  .notice, .error { display: flex; align-items: flex-start; gap: 7px; margin: 12px 16px 0; padding: 10px; border-radius: 9px; font-size: 10px; }
   .notice { background: #eef3ff; color: #315fca; }
+  .workspace .notice { margin-inline: 0; }
   .error { background: #fff0ee; color: #a23327; }
   .notice div { display: grid; gap: 2px; }
-  .notice small { color: #667085; }
-  .results { display: grid; gap: 9px; margin-top: 13px; }
-  .result { display: grid; gap: 7px; padding: 10px; border: 1px solid #d9e0e9; border-radius: 11px; }
-  .result strong { font-size: 10px; }
-  .result textarea { width: 100%; min-height: 84px; resize: vertical; padding: 9px; border: 1px solid #d9e0e9; border-radius: 9px; background: #f9fafb; color: #172033; font-size: 11px; line-height: 1.5; }
-  .result .secondary { justify-self: end; min-height: 31px; padding: 6px 9px; }
-  .status { color: #315fca; font-size: 9.5px; text-align: right; }
+  .notice small { color: #77766e; }
+  .results { display: grid; gap: 0; margin-top: 14px; padding: 0 16px; border-top: 1px solid #e5e3dc; }
+  .result { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px solid #e5e3dc; }
+  .result strong { font-size: 11px; }
+  .result textarea { width: 100%; min-height: 90px; resize: vertical; padding: 11px 12px; border: 1px solid #cbc9c0; border-radius: 9px; background: #fffdfa; color: #171816; font-size: 12px; line-height: 1.5; }
+  .result-actions { justify-content: flex-end; }
+  .result .secondary { min-height: 36px; padding: 6px 8px; }
+  .footer-action { padding: 5px 16px 8px; }
+  .status { padding: 0 16px 8px; color: #315fd0; font-size: 9.5px; text-align: right; }
   button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid #315fca; outline-offset: 2px; }
   @media (prefers-color-scheme: dark) {
-    .panel { border-color: #354052; background: #161b24; color: #eef2f8; }
-    .source, .result textarea { background: #202631; color: #eef2f8; }
-    .source p, .context small { color: #a6b0bf; }
+    .panel { border-color: #3b3b37; background: #191a18; color: #f2f0e9; }
+    .heading, .source, .results, .result { border-color: #353631; }
+    .result textarea, .choice, label select { border-color: #454640; background: #22231f; color: #f2f0e9; }
+    .source p, .context small, .brand-copy span { color: #aaa99f; }
     .context { color: #dce3ed; }
-    .choice, label select, .secondary { border-color: #3b4657; background: #1a202b; color: #dce3ed; }
     .choice[data-active="true"], .notice { background: #202d48; color: #8aafff; }
-    .result { border-color: #354052; }
+    .secondary, .text-button { color: #8aafff; }
     .error { background: #3c2424; color: #ffb5aa; }
   }
 `;
@@ -239,7 +252,15 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
       <style>{panelStyles}</style>
       <section className="panel" aria-label={copy.inlineTitle}>
         <div className="heading">
-          <h2>{copy.inlineTitle}</h2>
+          <div className="brand-heading">
+            <span className="brand-spark" aria-hidden="true">
+              <Sparkle size={22} weight="fill" />
+            </span>
+            <div className="brand-copy">
+              <strong>{copy.appName}</strong>
+              <span>{copy.inlineTitle}</span>
+            </div>
+          </div>
           <button type="button" className="icon" aria-label={copy.inlineClose} onClick={onClose}>
             <X size={17} weight="bold" aria-hidden="true" />
           </button>
@@ -251,7 +272,7 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
             {copy.inlineExtractionError}
           </div>
         ) : (
-          <>
+          <div className="workspace">
             <div className="source">
               <strong>{copy.inlineSourceLabel}</strong>
               <p>{context.text}</p>
@@ -332,7 +353,7 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
                 </div>
               </div>
             ) : null}
-          </>
+          </div>
         )}
 
         {error ? (
@@ -342,23 +363,22 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
           </div>
         ) : null}
 
-        <div className="actions">
-          <button type="button" className="secondary" onClick={openSidePanel}>
-            {copy.inlineOpenSidePanel}
-          </button>
-          {isGenerating ? (
-            <button type="button" className="secondary" onClick={cancel}>
-              <StopCircle size={15} aria-hidden="true" />
-              {copy.inlineCancel}
-            </button>
-          ) : null}
-          {!extractionFailed && bootstrap?.configured ? (
-            <button type="button" className="primary" disabled={isGenerating} onClick={generate}>
-              <Sparkle size={15} weight="fill" aria-hidden="true" />
-              {isGenerating ? copy.inlineGenerating : copy.inlineGenerate}
-            </button>
-          ) : null}
-        </div>
+        {isGenerating || (!extractionFailed && bootstrap?.configured) ? (
+          <div className="actions">
+            {isGenerating ? (
+              <button type="button" className="secondary" onClick={cancel}>
+                <StopCircle size={15} aria-hidden="true" />
+                {copy.inlineCancel}
+              </button>
+            ) : null}
+            {!extractionFailed && bootstrap?.configured ? (
+              <button type="button" className="primary" disabled={isGenerating} onClick={generate}>
+                <Sparkle size={15} weight="fill" aria-hidden="true" />
+                {isGenerating ? copy.inlineGenerating : copy.inlineGenerate}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {resultTexts.length > 0 ? (
           <div className="results">
@@ -373,10 +393,21 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
                   onChange={(event) => updateResultText(index, event.target.value)}
                   readOnly={result?.format === "thread"}
                 />
-                <button type="button" className="secondary" onClick={() => copyText(item.text)}>
-                  <Copy size={14} aria-hidden="true" />
-                  {copy.copyText}
-                </button>
+                <div className="result-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={isGenerating}
+                    onClick={generate}
+                  >
+                    <Sparkle size={14} aria-hidden="true" />
+                    {copy.regenerateItem}
+                  </button>
+                  <button type="button" className="secondary" onClick={() => copyText(item.text)}>
+                    <Copy size={14} aria-hidden="true" />
+                    {copy.copyText}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -386,6 +417,11 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
             {copyStatus}
           </div>
         ) : null}
+        <div className="footer-action">
+          <button type="button" className="text-button" onClick={openSidePanel}>
+            {copy.inlineOpenSidePanel}
+          </button>
+        </div>
       </section>
     </>
   );

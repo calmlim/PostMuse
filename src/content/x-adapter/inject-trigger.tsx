@@ -1,4 +1,4 @@
-import { MagicWand } from "@phosphor-icons/react";
+import { Sparkle } from "@phosphor-icons/react";
 import { createRoot } from "react-dom/client";
 import { getMessages } from "../../i18n";
 import { InlinePanel } from "../inline-app/InlinePanel";
@@ -33,7 +33,7 @@ function InlineTrigger({ onClick }: TriggerProps) {
         aria-label={copy.inlineTrigger}
         onClick={onClick}
       >
-        <MagicWand size={18} weight="regular" aria-hidden="true" />
+        <Sparkle size={18} weight="fill" aria-hidden="true" />
       </button>
     </>
   );

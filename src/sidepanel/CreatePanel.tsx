@@ -611,22 +611,41 @@ export function CreatePanel({
           <span className="input-count">{form.text.length.toLocaleString()} / 100,000</span>
         </div>
 
-        <div className="create-grid">
-          <label className="form-field">
-            <span>{copy.contentTypeLabel}</span>
-            <select
-              value={form.contentType}
-              onChange={(event) => selectContentType(event.target.value as ContentType)}
-              disabled={isGenerating}
-            >
-              <option value="post">{copy.contentTypePost}</option>
-              <option value="reply">{copy.contentTypeReply}</option>
-              <option value="quote">{copy.contentTypeQuote}</option>
-              <option value="thread">{copy.contentTypeThread}</option>
-              <option value="long-post">{copy.contentTypeLongPost}</option>
-            </select>
-          </label>
+        <fieldset className="format-selector">
+          <legend>{copy.contentTypeLabel}</legend>
+          <div>
+            {(["post", "reply", "quote", "thread", "long-post"] as const).map((contentType) => {
+              const labels: Record<ContentType, string> = {
+                post: copy.contentTypePost,
+                reply: copy.contentTypeReply,
+                quote: copy.contentTypeQuote,
+                thread: copy.contentTypeThread,
+                "long-post": copy.contentTypeLongPost,
+              };
+              const shortLabel =
+                contentType === "post"
+                  ? copy.contentTypePostShort
+                  : contentType === "long-post"
+                    ? copy.contentTypeLongPostShort
+                    : labels[contentType];
+              return (
+                <button
+                  type="button"
+                  aria-label={labels[contentType]}
+                  aria-pressed={form.contentType === contentType}
+                  data-active={form.contentType === contentType}
+                  onClick={() => selectContentType(contentType)}
+                  disabled={isGenerating}
+                  key={contentType}
+                >
+                  {shortLabel}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
+        <div className="create-grid">
           <label className="form-field">
             <span>{copy.outputLanguageLabel}</span>
             <select
