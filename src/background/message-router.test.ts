@@ -3,6 +3,7 @@ import { createDefaultProviderProfile } from "../core/settings/defaults";
 import { createGenerationInputFixture } from "../core/generation/fixtures";
 import { createStorageAreaMock, type StorageAreaMock } from "../test/chrome-storage";
 import { routeExtensionMessage } from "./message-router";
+import { savePromptTemplate } from "../storage/prompt-repository";
 
 let local: StorageAreaMock;
 let session: StorageAreaMock;
@@ -149,6 +150,11 @@ describe("background message router", () => {
         { status: 200 },
       ),
     );
+    await savePromptTemplate(
+      "professional",
+      "My professional voice",
+      "Use the saved prompt override.",
+    );
 
     const response = await routeExtensionMessage(
       {
@@ -168,6 +174,8 @@ describe("background message router", () => {
     });
     expect(JSON.stringify(response)).not.toContain("sk-router-secret-value");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.messages[0].content).toContain("Use the saved prompt override.");
   });
 
   it("cancels an active generation request", async () => {

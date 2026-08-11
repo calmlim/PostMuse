@@ -1,16 +1,18 @@
-import { GearSix, PencilSimple, ShieldCheck, Sparkle } from "@phosphor-icons/react";
+import { GearSix, MagicWand, PencilSimple, Sparkle } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { DEFAULT_LOCALE, getMessages, type Locale } from "../i18n";
 import { loadUiLocale, saveUiLocale } from "../storage/locale-storage";
 import { SettingsPanel } from "./SettingsPanel";
 import { CreatePanel } from "./CreatePanel";
+import { PromptsPanel } from "./PromptsPanel";
 
 const localeOptions: Locale[] = ["en", "zh-CN"];
 
 export function App() {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
-  const [view, setView] = useState<"create" | "settings">("create");
+  const [view, setView] = useState<"create" | "prompts" | "settings">("create");
   const [settingsRevision, setSettingsRevision] = useState(0);
+  const [promptRevision, setPromptRevision] = useState(0);
   const copy = getMessages(locale);
 
   useEffect(() => {
@@ -68,6 +70,13 @@ export function App() {
             copy={copy}
             onOpenSettings={() => setView("settings")}
             settingsRevision={settingsRevision}
+            promptRevision={promptRevision}
+          />
+        </div>
+        <div hidden={view !== "prompts"}>
+          <PromptsPanel
+            copy={copy}
+            onPromptsChanged={() => setPromptRevision((revision) => revision + 1)}
           />
         </div>
         <div hidden={view !== "settings"}>
@@ -83,10 +92,10 @@ export function App() {
           <PencilSimple size={18} weight={view === "create" ? "fill" : "regular"} />
           <span>{copy.createNav}</span>
         </button>
-        <span className="privacy-mark">
-          <ShieldCheck size={15} weight="duotone" aria-hidden="true" />
-          {copy.privacyNote}
-        </span>
+        <button type="button" data-active={view === "prompts"} onClick={() => setView("prompts")}>
+          <MagicWand size={18} weight={view === "prompts" ? "fill" : "regular"} />
+          <span>{copy.promptsNav}</span>
+        </button>
         <button type="button" data-active={view === "settings"} onClick={() => setView("settings")}>
           <GearSix size={18} weight={view === "settings" ? "fill" : "regular"} />
           <span>{copy.settingsNav}</span>

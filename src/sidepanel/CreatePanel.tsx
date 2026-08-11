@@ -17,10 +17,15 @@ import type {
   SourceKind,
 } from "../core/generation/types";
 import { MAX_FILE_BYTES } from "../core/generation/validation";
-import { BUILT_IN_STYLES } from "../core/prompts/styles";
+import {
+  createDefaultPromptLibrary,
+  type ResolvedPromptTemplate,
+  resolvePromptLibrary,
+} from "../core/prompts/library";
 import type { ProviderProfile, SettingsSnapshot } from "../core/settings/types";
 import type { Messages } from "../i18n";
 import { loadCreateAdvancedOpen, saveCreateAdvancedOpen } from "../storage/create-ui-preferences";
+import { loadResolvedPromptLibrary } from "../storage/prompt-repository";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
 import { GenerationResults } from "./GenerationResults";
 
@@ -28,6 +33,7 @@ interface CreatePanelProps {
   copy: Messages;
   onOpenSettings: () => void;
   settingsRevision: number;
+  promptRevision: number;
 }
 
 interface DraftForm {
@@ -64,6 +70,8 @@ const initialForm: DraftForm = {
   threadCount: 5,
 };
 
+const defaultActiveStyles = resolvePromptLibrary(createDefaultPromptLibrary()).active;
+
 const getActiveProfile = (snapshot: SettingsSnapshot): ProviderProfile | undefined =>
   snapshot.settings.textProviderProfiles.find(
     (profile) => profile.id === snapshot.settings.activeTextProviderProfileId,
@@ -77,6 +85,7 @@ const getFriendlyError = (error: unknown, copy: Messages): string => {
   const localized: Partial<Record<string, string>> = {
     API_KEY_REQUIRED: copy.errorKeyRequired,
     MODEL_REQUIRED: copy.errorModelRequired,
+    STYLE_NOT_FOUND: copy.errorStyleNotFound,
     HOST_PERMISSION_REQUIRED: copy.errorPermissionRequired,
     AUTH_INVALID: copy.errorAuthInvalid,
     MODEL_FORBIDDEN: copy.errorModelForbidden,
@@ -95,7 +104,12 @@ const getFriendlyError = (error: unknown, copy: Messages): string => {
   return localized[error.name] ?? error.message ?? copy.generationErrorGeneric;
 };
 
-export function CreatePanel({ copy, onOpenSettings, settingsRevision }: CreatePanelProps) {
+export function CreatePanel({
+  copy,
+  onOpenSettings,
+  settingsRevision,
+  promptRevision,
+}: CreatePanelProps) {
   const [form, setForm] = useState<DraftForm>(initialForm);
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -103,25 +117,33 @@ export function CreatePanel({ copy, onOpenSettings, settingsRevision }: CreatePa
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string>();
   const [fileName, setFileName] = useState<string>();
+  const [styles, setStyles] = useState<ResolvedPromptTemplate[]>(defaultActiveStyles);
   const activeRequestId = useRef<string | undefined>(undefined);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Settings revision is an explicit reload signal.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Revisions are explicit reload signals.
   useEffect(() => {
     let active = true;
     void Promise.all([
       sendExtensionRequest({ type: "settings.get" }).catch(() => undefined),
       loadCreateAdvancedOpen(),
-    ]).then(([settingsSnapshot, storedAdvancedOpen]) => {
+      loadResolvedPromptLibrary(),
+    ]).then(([settingsSnapshot, storedAdvancedOpen, promptLibrary]) => {
       if (active) {
         setSnapshot(settingsSnapshot);
         setAdvancedOpen(storedAdvancedOpen);
+        setStyles(promptLibrary.active);
+        setForm((current) =>
+          promptLibrary.active.some((style) => style.id === current.styleId)
+            ? current
+            : { ...current, styleId: promptLibrary.active[0]?.id ?? "professional" },
+        );
       }
     });
 
     return () => {
       active = false;
     };
-  }, [settingsRevision]);
+  }, [settingsRevision, promptRevision]);
 
   const updateForm = <K extends keyof DraftForm>(key: K, value: DraftForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -376,9 +398,11 @@ export function CreatePanel({ copy, onOpenSettings, settingsRevision }: CreatePa
               onChange={(event) => updateForm("styleId", event.target.value)}
               disabled={isGenerating}
             >
-              {BUILT_IN_STYLES.map((style) => (
+              {styles.map((style) => (
                 <option value={style.id} key={style.id}>
-                  {styleLabels[style.id]}
+                  {style.source === "built-in" && !style.isOverridden
+                    ? (styleLabels[style.id] ?? style.label)
+                    : style.label}
                 </option>
               ))}
             </select>

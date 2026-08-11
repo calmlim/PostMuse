@@ -78,6 +78,7 @@ describe("Side Panel App", () => {
 
     expect(screen.getByRole("heading", { name: "Turn an idea into a post" })).toBeVisible();
     expect(screen.getByRole("group", { name: "Interface language" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Prompts" })).toBeVisible();
   });
 
   it("switches to Chinese and stores the preference", async () => {
@@ -250,5 +251,38 @@ describe("Side Panel App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(screen.getByLabelText("Your idea or draft")).toHaveValue("Keep this local draft");
+  });
+
+  it("makes a newly saved custom style available in Create", async () => {
+    const localData: Record<string, unknown> = {};
+    storageGet.mockImplementation(async (keys?: string | string[]) => {
+      const requested = typeof keys === "string" ? [keys] : keys;
+      if (!requested) {
+        return { ...localData };
+      }
+      return Object.fromEntries(
+        requested.filter((key) => key in localData).map((key) => [key, localData[key]]),
+      );
+    });
+    storageSet.mockImplementation(async (values: Record<string, unknown>) => {
+      Object.assign(localData, values);
+    });
+    vi.stubGlobal("crypto", { randomUUID: () => "app-style-id" });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Prompts" }));
+    expect(await screen.findByRole("heading", { name: "Shape your voice" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "New style" }));
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Field notes" },
+    });
+    fireEvent.change(screen.getByLabelText("Style instructions"), {
+      target: { value: "Prefer concise observations from direct experience." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save style" }));
+    expect(await screen.findByText("Custom style created.")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(await screen.findByRole("option", { name: "Field notes" })).toBeInTheDocument();
   });
 });

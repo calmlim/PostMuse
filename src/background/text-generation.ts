@@ -4,6 +4,7 @@ import type { GenerationInput, GenerationResult } from "../core/generation/types
 import { buildTextGenerationRequest } from "../core/prompts/prompt-builder";
 import type { ProviderProfile } from "../core/settings/types";
 import { getTextProviderAdapter } from "../providers/text";
+import { findActivePrompt } from "../storage/prompt-repository";
 
 export const generateText = async (
   input: GenerationInput,
@@ -18,7 +19,12 @@ export const generateText = async (
     throw new AppError("API_KEY_REQUIRED", "Add an API key before generating.");
   }
 
-  const request = buildTextGenerationRequest(input);
+  const style = await findActivePrompt(input.styleId);
+  if (!style) {
+    throw new AppError("STYLE_NOT_FOUND", "Choose an available style before generating.");
+  }
+
+  const request = buildTextGenerationRequest(input, style);
   const response = await getTextProviderAdapter(profile.provider).generate(request, {
     profile,
     apiKey,

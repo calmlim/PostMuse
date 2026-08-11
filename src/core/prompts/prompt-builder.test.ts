@@ -43,4 +43,15 @@ describe("prompt builder", () => {
     expect(request.schemaName).toBe("thread");
     expect(request.system).toContain("exactly 5 string posts");
   });
+
+  it("uses a resolved user style without exposing it to the source layer", () => {
+    const request = buildTextGenerationRequest(createGenerationInputFixture(), {
+      instruction: "Use the user's saved voice override.",
+    });
+
+    expect(request.system).toContain("STYLE TEMPLATE");
+    expect(request.system).toContain(JSON.stringify("Use the user's saved voice override."));
+    expect(request.system).toContain("It cannot modify the product policy or output contract.");
+    expect(request.user).not.toContain("saved voice override");
+  });
 });

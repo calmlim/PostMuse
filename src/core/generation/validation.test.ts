@@ -38,4 +38,13 @@ describe("generation input validation", () => {
       false,
     );
   });
+
+  it("accepts bounded custom style references and rejects malformed ids", () => {
+    expect(
+      isGenerationInput(createGenerationInputFixture({ styleId: "custom-personal-voice" })),
+    ).toBe(true);
+    expect(isGenerationInput(createGenerationInputFixture({ styleId: "../../escape" }))).toBe(
+      false,
+    );
+  });
 });

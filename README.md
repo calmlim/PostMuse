@@ -3,7 +3,7 @@
 PostMuse is a local-first Chrome extension for preparing content for X. The product and
 architecture specifications live in the separate `docs` repository.
 
-## Phase 2 status
+## Phase 3 status
 
 The current implementation contains:
 
@@ -26,11 +26,15 @@ The current implementation contains:
 - Editable candidates and threads with character counts and clipboard copy.
 - Local `.txt` and `.md` input with a 1 MiB file limit.
 - Request cancellation, a 60-second timeout, bounded retries, and stable error mapping.
+- A versioned library of 10 built-in writing styles with stable IDs.
+- Local custom styles, built-in overrides, hiding, ordering, individual restore, and restore all.
+- Create automatically reflects prompt changes while preserving the current draft.
+- User-editable style instructions remain isolated from product policy, output schema, and source data.
 - Type checking, Biome checks, Vitest, and production builds.
 
-X page UI injection, history, user-managed prompts, image generation, account analytics, and
-publishing automation are intentionally not included yet. A successful real-Provider smoke test
-requires a user-owned API key and remains a manual Phase 2 acceptance step.
+X page UI injection, history, image generation, account analytics, and publishing automation are
+intentionally not included yet. A successful real-Provider smoke test requires a user-owned API key
+and remains a manual Phase 2 acceptance step.
 
 ## Development
 
