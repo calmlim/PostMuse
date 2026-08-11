@@ -4,15 +4,24 @@ import { createGenerationInputFixture } from "../core/generation/fixtures";
 import { createStorageAreaMock, type StorageAreaMock } from "../test/chrome-storage";
 import { routeExtensionMessage } from "./message-router";
 import { savePromptTemplate } from "../storage/prompt-repository";
+import { listHistoryRecords } from "../storage/history-repository";
+import { takePendingXContext } from "../storage/pending-context";
 
 let local: StorageAreaMock;
 let session: StorageAreaMock;
 const permissionContains = vi.fn();
 const fetchMock = vi.fn();
+const sidePanelOpen = vi.fn();
 
 const trustedSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
+} as chrome.runtime.MessageSender;
+
+const xContentSender = {
+  id: "extension-id",
+  url: "https://x.com/home",
+  tab: { id: 3, url: "https://x.com/home" } as chrome.tabs.Tab,
 } as chrome.runtime.MessageSender;
 
 beforeEach(() => {
@@ -21,11 +30,14 @@ beforeEach(() => {
   permissionContains.mockReset();
   permissionContains.mockResolvedValue(true);
   fetchMock.mockReset();
+  sidePanelOpen.mockReset();
+  sidePanelOpen.mockResolvedValue(undefined);
   vi.stubGlobal("fetch", fetchMock);
 
   vi.stubGlobal("chrome", {
     storage: { local, session },
     permissions: { contains: permissionContains },
+    sidePanel: { open: sidePanelOpen },
     runtime: {
       id: "extension-id",
       getURL: (path: string) => `chrome-extension://extension-id/${path}`,
@@ -75,6 +87,36 @@ describe("background message router", () => {
       ok: true,
       data: { activeSecretStatus: { hasKey: true, persistence: "session" } },
     });
+  });
+
+  it("allows only the limited inline bootstrap response from an X content script", async () => {
+    const response = await routeExtensionMessage(
+      { type: "inline.bootstrap", requestId: "inline-bootstrap-1" },
+      xContentSender,
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: {
+        locale: "en",
+        configured: false,
+        providerDisplayName: "OpenAI-compatible",
+        styles: expect.arrayContaining([
+          expect.objectContaining({ id: "professional", version: 1, isBuiltInDefault: true }),
+        ]),
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("apiKey");
+
+    await expect(
+      routeExtensionMessage(
+        { type: "inline.bootstrap", requestId: "inline-bootstrap-2" },
+        {
+          ...xContentSender,
+          url: "https://example.com/",
+        },
+      ),
+    ).resolves.toMatchObject({ ok: false, error: { code: "UNTRUSTED_SENDER" } });
   });
 
   it("requires exact host permission before the mock setup test", async () => {
@@ -176,6 +218,63 @@ describe("background message router", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(requestBody.messages[0].content).toContain("Use the saved prompt override.");
+  });
+
+  it("generates for the X inline panel in the worker and saves structured history", async () => {
+    const profile = { ...createDefaultProviderProfile(), model: "gpt-inline" };
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "inline-settings",
+        profile,
+        apiKey: "sk-inline-secret",
+      },
+      trustedSender,
+    );
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"candidates":[{"text":"One"},{"text":"Two"},{"text":"Three"}]}',
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    const input = createGenerationInputFixture({
+      source: { kind: "draft", text: "Current visible X post" },
+    });
+
+    const response = await routeExtensionMessage(
+      { type: "inline.generate", requestId: "inline-generation", input },
+      xContentSender,
+    );
+
+    expect(response).toMatchObject({ ok: true, data: { format: "candidates" } });
+    expect(await listHistoryRecords()).toHaveLength(1);
+    expect((await listHistoryRecords())[0].input.source.text).toBe("Current visible X post");
+    expect(JSON.stringify(response)).not.toContain("sk-inline-secret");
+  });
+
+  it("hands one validated input to the side panel for the current X tab", async () => {
+    const input = createGenerationInputFixture({
+      source: { kind: "draft", text: "Move this context" },
+      contentType: "reply",
+    });
+
+    const response = await routeExtensionMessage(
+      { type: "inline.openSidePanel", requestId: "open-inline", input },
+      xContentSender,
+    );
+
+    expect(response).toEqual({ ok: true, data: { opened: true } });
+    expect(sidePanelOpen).toHaveBeenCalledWith({ tabId: 3 });
+    await expect(takePendingXContext()).resolves.toEqual(input);
+    await expect(takePendingXContext()).resolves.toBeUndefined();
   });
 
   it("cancels an active generation request", async () => {

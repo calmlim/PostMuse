@@ -9,6 +9,10 @@ export const MESSAGE_TYPES = [
   "provider.test",
   "text.generate",
   "text.cancel",
+  "inline.bootstrap",
+  "inline.generate",
+  "inline.cancel",
+  "inline.openSidePanel",
 ] as const;
 
 export type MessageType = (typeof MESSAGE_TYPES)[number];
@@ -23,7 +27,19 @@ export type ExtensionRequest =
     }
   | { type: "provider.test"; requestId: string; profileId: string }
   | { type: "text.generate"; requestId: string; input: GenerationInput }
-  | { type: "text.cancel"; requestId: string; targetRequestId: string };
+  | { type: "text.cancel"; requestId: string; targetRequestId: string }
+  | { type: "inline.bootstrap"; requestId: string }
+  | { type: "inline.generate"; requestId: string; input: GenerationInput }
+  | { type: "inline.cancel"; requestId: string; targetRequestId: string }
+  | { type: "inline.openSidePanel"; requestId: string; input?: GenerationInput };
+
+export interface InlineBootstrap {
+  locale: "en" | "zh-CN";
+  configured: boolean;
+  providerDisplayName: string;
+  model: string;
+  styles: Array<{ id: string; label: string; version: number; isBuiltInDefault: boolean }>;
+}
 
 export interface ExtensionError {
   code: ExtensionErrorCode;
@@ -61,6 +77,10 @@ export interface ExtensionResponseMap {
   "provider.test": MockConnectionResult;
   "text.generate": GenerationResult;
   "text.cancel": { cancelled: boolean };
+  "inline.bootstrap": InlineBootstrap;
+  "inline.generate": GenerationResult;
+  "inline.cancel": { cancelled: boolean };
+  "inline.openSidePanel": { opened: true };
 }
 
 const hasValidEnvelope = (value: unknown): value is Record<string, unknown> =>
@@ -76,7 +96,7 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
     return false;
   }
 
-  if (value.type === "settings.get") {
+  if (value.type === "settings.get" || value.type === "inline.bootstrap") {
     return true;
   }
 
@@ -88,11 +108,15 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
     );
   }
 
-  if (value.type === "text.generate") {
+  if (value.type === "text.generate" || value.type === "inline.generate") {
     return isGenerationInput(value.input);
   }
 
-  if (value.type === "text.cancel") {
+  if (value.type === "inline.openSidePanel") {
+    return value.input === undefined || isGenerationInput(value.input);
+  }
+
+  if (value.type === "text.cancel" || value.type === "inline.cancel") {
     return (
       typeof value.targetRequestId === "string" &&
       value.targetRequestId.length > 0 &&

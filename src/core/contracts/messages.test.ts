@@ -16,6 +16,13 @@ describe("extension message validation", () => {
     ).toBe(true);
     expect(
       isExtensionRequest({
+        type: "inline.openSidePanel",
+        requestId: "request-4",
+        input: createGenerationInputFixture(),
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionRequest({
         type: "text.generate",
         requestId: "request-3",
         input: createGenerationInputFixture(),

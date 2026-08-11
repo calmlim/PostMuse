@@ -4,12 +4,14 @@ import { createGenerationInputFixture } from "../core/generation/fixtures";
 import { createDefaultSettings } from "../core/settings/defaults";
 import { HISTORY_PREFERENCES_STORAGE_KEY } from "../storage/history-preferences";
 import { listHistoryRecords, saveHistoryRecord } from "../storage/history-repository";
+import { PENDING_X_CONTEXT_STORAGE_KEY } from "../storage/pending-context";
 import { App } from "./App";
 
 const storageGet = vi.fn();
 const storageSet = vi.fn();
 const sessionGet = vi.fn();
 const sessionSet = vi.fn();
+const sessionRemove = vi.fn();
 const runtimeSendMessage = vi.fn();
 const permissionsRequest = vi.fn();
 
@@ -18,12 +20,14 @@ beforeEach(() => {
   storageSet.mockReset();
   sessionGet.mockReset();
   sessionSet.mockReset();
+  sessionRemove.mockReset();
   runtimeSendMessage.mockReset();
   permissionsRequest.mockReset();
   storageGet.mockResolvedValue({});
   storageSet.mockResolvedValue(undefined);
   sessionGet.mockResolvedValue({});
   sessionSet.mockResolvedValue(undefined);
+  sessionRemove.mockResolvedValue(undefined);
   permissionsRequest.mockResolvedValue(true);
 
   const defaultSettings = createDefaultSettings();
@@ -68,6 +72,7 @@ beforeEach(() => {
       session: {
         get: sessionGet,
         set: sessionSet,
+        remove: sessionRemove,
       },
     },
     runtime: { sendMessage: runtimeSendMessage },
@@ -388,6 +393,33 @@ describe("Side Panel App", () => {
     expect(runtimeSendMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "text.generate" }),
     );
+  });
+
+  it("consumes a one-shot X context when the side panel opens", async () => {
+    const input = createGenerationInputFixture({
+      source: { kind: "draft", text: "Context handed off from X" },
+      contentType: "reply",
+      candidateCount: 3,
+    });
+    sessionGet.mockImplementation(async (key?: string) =>
+      key === PENDING_X_CONTEXT_STORAGE_KEY
+        ? {
+            [PENDING_X_CONTEXT_STORAGE_KEY]: {
+              schemaVersion: 1,
+              expiresAt: Date.now() + 60_000,
+              input,
+            },
+          }
+        : {},
+    );
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Your idea or draft")).toHaveValue("Context handed off from X"),
+    );
+    expect(screen.getByLabelText("Format")).toHaveValue("reply");
+    expect(sessionRemove).toHaveBeenCalledWith(PENDING_X_CONTEXT_STORAGE_KEY);
   });
 
   it("makes a newly saved custom style available in Create", async () => {

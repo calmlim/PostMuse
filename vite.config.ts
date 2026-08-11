@@ -13,7 +13,6 @@ export default defineConfig({
       input: {
         sidepanel: fromRoot("./sidepanel.html"),
         background: fromRoot("./src/background/index.ts"),
-        content: fromRoot("./src/content/index.ts"),
       },
       output: {
         entryFileNames: "assets/[name].js",

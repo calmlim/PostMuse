@@ -3,7 +3,7 @@
 PostMuse is a local-first Chrome extension for preparing content for X. The product and
 architecture specifications live in the separate `docs` repository.
 
-## Phase 3 status
+## Phase 5 status
 
 The current implementation contains:
 
@@ -30,11 +30,22 @@ The current implementation contains:
 - Local custom styles, built-in overrides, hiding, ordering, individual restore, and restore all.
 - Create automatically reflects prompt changes while preserving the current draft.
 - User-editable style instructions remain isolated from product policy, output schema, and source data.
+- IndexedDB history keeps the latest 100 structured generations with search, edit, copy, reuse,
+  delete, clear, and an opt-out for new saves.
+- A low-intrusion X action-bar trigger reads only the user-selected visible Post and opens an
+  isolated Shadow DOM panel for Rewrite, Reply, or Quote drafts.
+- Related quoted context is shown locally and enters a request only after explicit opt-in.
+- The inline panel can hand a one-shot input to the Side Panel; it never fills a composer or
+  clicks an X publish control.
+- X DOM observation is batched and idempotent, with cleanup for virtual-list node removal.
+- Content-script messages are limited to inline bootstrap/generation/cancel/open operations;
+  Provider keys stay in trusted extension contexts.
 - Type checking, Biome checks, Vitest, and production builds.
 
-X page UI injection, history, image generation, account analytics, and publishing automation are
-intentionally not included yet. A successful real-Provider smoke test requires a user-owned API key
-and remains a manual Phase 2 acceptance step.
+Composer Fill, image generation, account analytics, and publishing automation are intentionally not
+included yet. A successful real-Provider smoke test requires a user-owned API key and remains a
+manual Phase 2 acceptance step. A live English/Chinese x.com smoke test also remains manual after
+loading the unpacked `dist/` extension.
 
 ## Development
 
@@ -44,6 +55,10 @@ npm run dev
 ```
 
 `npm run dev` rebuilds the extension into `dist/` when source files change.
+
+X inline context is enabled by default for the author/development build. Build with
+`VITE_X_INLINE_ENABLED=false npm run build` to produce an inert Content Script while keeping the
+Side Panel available. Reassess the X policy release gate before any public store build.
 
 ## Load in Chrome
 

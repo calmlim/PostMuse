@@ -10,6 +10,7 @@ import { createRequestId } from "../core/contracts/messages";
 import type { GenerationInput } from "../core/generation/types";
 import { DEFAULT_LOCALE, getMessages, type Locale } from "../i18n";
 import { loadUiLocale, saveUiLocale } from "../storage/locale-storage";
+import { PENDING_X_CONTEXT_STORAGE_KEY, takePendingXContext } from "../storage/pending-context";
 import { SettingsPanel } from "./SettingsPanel";
 import { CreatePanel } from "./CreatePanel";
 import { HistoryPanel } from "./HistoryPanel";
@@ -40,6 +41,36 @@ export function App() {
 
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const consumePendingContext = () => {
+      void takePendingXContext()
+        .then((input) => {
+          if (active && input) {
+            setHistoryDraft({ requestId: createRequestId(), input });
+            setView("create");
+          }
+        })
+        .catch(() => undefined);
+    };
+    consumePendingContext();
+
+    const storageChanges = typeof chrome !== "undefined" ? chrome.storage?.onChanged : undefined;
+    const handleStorageChange = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string,
+    ) => {
+      if (areaName === "session" && PENDING_X_CONTEXT_STORAGE_KEY in changes) {
+        consumePendingContext();
+      }
+    };
+    storageChanges?.addListener(handleStorageChange);
+    return () => {
+      active = false;
+      storageChanges?.removeListener(handleStorageChange);
     };
   }, []);
 
