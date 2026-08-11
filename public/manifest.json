@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "PostMuse",
+  "short_name": "PostMuse",
+  "version": "0.1.0",
+  "description": "AI writing companion for preparing content for X.",
+  "minimum_chrome_version": "114",
+  "permissions": ["sidePanel", "storage"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open PostMuse"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*"],
+      "js": ["assets/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
