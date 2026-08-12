@@ -40,6 +40,7 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.replaceChildren();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("inline X mount", () => {
@@ -99,5 +100,82 @@ describe("inline X mount", () => {
       second?.destroy();
     });
     expect(firstArticle.hasAttribute("data-postmuse-mounted")).toBe(false);
+  });
+
+  it("opens the panel without triggering the post card navigation handlers", async () => {
+    const article = createPost("Stay on the timeline");
+    const articleClick = vi.fn();
+    const articlePointerDown = vi.fn();
+    article.addEventListener("click", articleClick);
+    article.addEventListener("pointerdown", articlePointerDown);
+
+    let mounted: MountedXPost | undefined;
+    await act(async () => {
+      mounted = mountInlinePost(article, vi.fn());
+    });
+
+    const trigger = article.querySelector<HTMLElement>('[data-postmuse-host="trigger"]');
+    const button = trigger?.shadowRoot?.querySelector<HTMLButtonElement>("button");
+    const panel = article.querySelector<HTMLElement>('[data-postmuse-host="panel"]');
+    expect(button).toBeDefined();
+
+    button?.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, cancelable: true, composed: true }),
+    );
+    await act(async () => {
+      button?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, composed: true }),
+      );
+    });
+
+    expect(articlePointerDown).not.toHaveBeenCalled();
+    expect(articleClick).not.toHaveBeenCalled();
+    expect(panel?.shadowRoot?.querySelector("section")).not.toBeNull();
+
+    const panelSection = panel?.shadowRoot?.querySelector("section");
+    panelSection?.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, cancelable: true, composed: true }),
+    );
+    panelSection?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true, composed: true }),
+    );
+    expect(articlePointerDown).not.toHaveBeenCalled();
+    expect(articleClick).not.toHaveBeenCalled();
+
+    await act(async () => mounted?.destroy());
+  });
+
+  it("defaults to rewrite on the timeline and reply on a post detail page", async () => {
+    const openPanelAt = async (path: string) => {
+      window.history.replaceState({}, "", path);
+      const article = createPost(`Post at ${path}`);
+      let mounted: MountedXPost | undefined;
+      await act(async () => {
+        mounted = mountInlinePost(article, vi.fn());
+      });
+      const trigger = article.querySelector<HTMLElement>('[data-postmuse-host="trigger"]');
+      await act(async () => {
+        trigger?.shadowRoot?.querySelector<HTMLButtonElement>("button")?.click();
+      });
+      const panel = article.querySelector<HTMLElement>('[data-postmuse-host="panel"]');
+      return { article, mounted, panel };
+    };
+
+    const timeline = await openPanelAt("/home");
+    expect(
+      Array.from(timeline.panel?.shadowRoot?.querySelectorAll("button") ?? []).find(
+        (button) => button.textContent === "Rewrite",
+      ),
+    ).toHaveAttribute("aria-pressed", "true");
+    await act(async () => timeline.mounted?.destroy());
+    timeline.article.remove();
+
+    const detail = await openPanelAt("/postmuse/status/123456789");
+    expect(
+      Array.from(detail.panel?.shadowRoot?.querySelectorAll("button") ?? []).find(
+        (button) => button.textContent === "Reply",
+      ),
+    ).toHaveAttribute("aria-pressed", "true");
+    await act(async () => detail.mounted?.destroy());
   });
 });

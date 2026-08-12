@@ -98,4 +98,27 @@ describe("generation input validation", () => {
       false,
     );
   });
+
+  it("validates per-task custom character targets", () => {
+    expect(
+      isGenerationInput(createGenerationInputFixture({ length: "custom", customLength: 280 })),
+    ).toBe(true);
+    expect(
+      isGenerationInput(createGenerationInputFixture({ length: "custom", customLength: 281 })),
+    ).toBe(false);
+    expect(
+      isGenerationInput(
+        createGenerationInputFixture({
+          contentType: "long-post",
+          candidateCount: 1,
+          length: "custom",
+          customLength: 25_000,
+        }),
+      ),
+    ).toBe(true);
+    expect(isGenerationInput(createGenerationInputFixture({ length: "custom" }))).toBe(false);
+    expect(
+      isGenerationInput(createGenerationInputFixture({ length: "medium", customLength: 180 })),
+    ).toBe(false);
+  });
 });

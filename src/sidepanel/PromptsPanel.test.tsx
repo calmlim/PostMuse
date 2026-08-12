@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getMessages } from "../i18n";
 import { createStorageAreaMock, type StorageAreaMock } from "../test/chrome-storage";
 import { PROMPT_LIBRARY_STORAGE_KEY } from "../storage/prompt-repository";
+import { CREATION_PREFERENCES_STORAGE_KEY } from "../storage/creation-preferences";
+import { WRITING_PROFILE_STORAGE_KEY } from "../storage/writing-profile-repository";
 import { PromptsPanel } from "./PromptsPanel";
 
 let local: StorageAreaMock;
@@ -14,6 +16,25 @@ beforeEach(() => {
 });
 
 describe("PromptsPanel", () => {
+  it("shows an inert example and saves only user-entered profile text", async () => {
+    const onPromptsChanged = vi.fn();
+    render(<PromptsPanel copy={getMessages("en")} onPromptsChanged={onPromptsChanged} />);
+
+    const profile = await screen.findByLabelText("About you and your voice");
+    expect(profile).toHaveValue("");
+    expect(profile).toHaveAttribute("placeholder", expect.stringContaining("Example only"));
+    expect(local.data[WRITING_PROFILE_STORAGE_KEY]).toBeUndefined();
+
+    fireEvent.change(profile, { target: { value: "I build practical AI tools and avoid hype." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    expect(await screen.findByText("Writing profile saved.")).toBeVisible();
+    expect(local.data[WRITING_PROFILE_STORAGE_KEY]).toBe(
+      "I build practical AI tools and avoid hype.",
+    );
+    expect(onPromptsChanged).toHaveBeenCalledTimes(1);
+  });
+
   it("edits and restores a built-in style override", async () => {
     const onPromptsChanged = vi.fn();
     render(<PromptsPanel copy={getMessages("en")} onPromptsChanged={onPromptsChanged} />);
@@ -85,5 +106,18 @@ describe("PromptsPanel", () => {
       ).not.toBeInTheDocument(),
     );
     expect(screen.getByText("Professional")).toBeVisible();
+  });
+
+  it("sets the default style used by new creation surfaces", async () => {
+    render(<PromptsPanel copy={getMessages("en")} onPromptsChanged={vi.fn()} />);
+    const concise = (await screen.findByText("Concise")).closest("article");
+
+    fireEvent.click(within(concise as HTMLElement).getByRole("button", { name: "Set as default" }));
+
+    expect(await screen.findByText("Default style updated.")).toBeVisible();
+    expect(local.data[CREATION_PREFERENCES_STORAGE_KEY]).toMatchObject({
+      defaultStyleId: "concise",
+    });
+    expect(within(concise as HTMLElement).getByRole("button", { name: "Default" })).toBeDisabled();
   });
 });

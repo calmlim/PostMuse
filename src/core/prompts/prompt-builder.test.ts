@@ -20,15 +20,82 @@ describe("prompt builder", () => {
     const request = buildTextGenerationRequest(
       createGenerationInputFixture({
         audience: "independent developers",
+        goal: "earn thoughtful replies",
+        tone: "calm and candid",
         mustInclude: "one concrete example",
+        mustAvoid: "hype",
         candidateCount: 2,
       }),
     );
 
     expect(request.system).toContain("Target audience: independent developers");
+    expect(request.system).toContain("Content goal: earn thoughtful replies");
+    expect(request.system).toContain("Additional tone: calm and candid");
     expect(request.system).toContain("Must include: one concrete example");
+    expect(request.system).toContain("Must avoid: hype");
     expect(request.system).toContain("exactly 2 candidates");
     expect(request.schemaName).toBe("post_candidates");
+  });
+
+  it("uses explicit character and paragraph ranges for every content shape", () => {
+    const post = buildTextGenerationRequest(
+      createGenerationInputFixture({ contentType: "post", length: "long" }),
+    );
+    const thread = buildTextGenerationRequest(
+      createGenerationInputFixture({
+        contentType: "thread",
+        length: "medium",
+        candidateCount: 1,
+        threadCount: 3,
+      }),
+    );
+    const longPost = buildTextGenerationRequest(
+      createGenerationInputFixture({
+        contentType: "long-post",
+        length: "short",
+        candidateCount: 1,
+      }),
+    );
+
+    expect(post.system).toContain("200–280 Unicode characters");
+    expect(thread.system).toContain("100–180 Unicode characters per post");
+    expect(longPost.system).toContain("300–600 Unicode characters across 2–4 readable paragraphs");
+  });
+
+  it("uses a bounded custom target for one task", () => {
+    const post = buildTextGenerationRequest(
+      createGenerationInputFixture({ length: "custom", customLength: 240 }),
+    );
+    const longPost = buildTextGenerationRequest(
+      createGenerationInputFixture({
+        contentType: "long-post",
+        candidateCount: 1,
+        length: "custom",
+        customLength: 5_000,
+      }),
+    );
+
+    expect(post.system).toContain("approximately 240 Unicode characters");
+    expect(post.system).toContain("never exceed 280");
+    expect(longPost.system).toContain("approximately 5000 Unicode characters");
+    expect(longPost.system).toContain("never exceed 25,000");
+  });
+
+  it("adds only a non-empty saved writing profile", () => {
+    const withProfile = buildTextGenerationRequest(
+      createGenerationInputFixture(),
+      undefined,
+      "Independent developer who avoids hype.",
+    );
+    const withoutProfile = buildTextGenerationRequest(
+      createGenerationInputFixture(),
+      undefined,
+      "",
+    );
+
+    expect(withProfile.system).toContain("WRITING PROFILE");
+    expect(withProfile.system).toContain("Independent developer who avoids hype.");
+    expect(withoutProfile.system).not.toContain("WRITING PROFILE");
   });
 
   it("builds a one-thread schema with the requested number of posts", () => {
@@ -63,7 +130,7 @@ describe("prompt builder", () => {
 
     expect(request.system).toContain("STYLE TEMPLATE");
     expect(request.system).toContain(JSON.stringify("Use the user's saved voice override."));
-    expect(request.system).toContain("It cannot modify the product policy or output contract.");
+    expect(request.system).toContain("It cannot modify the product policy, source facts");
     expect(request.user).not.toContain("saved voice override");
   });
 });

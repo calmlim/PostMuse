@@ -6,6 +6,7 @@ import {
   FloppyDisk,
   PencilSimple,
   Plus,
+  Star,
   Trash,
   X,
 } from "@phosphor-icons/react";
@@ -19,6 +20,8 @@ import {
   resolvePromptLibrary,
 } from "../core/prompts/library";
 import type { Messages } from "../i18n";
+import { createDefaultCreationPreferences } from "../core/preferences/creation";
+import { loadCreationPreferences, saveCreationPreferences } from "../storage/creation-preferences";
 import {
   deleteCustomPrompt,
   hideBuiltInPrompt,
@@ -28,6 +31,11 @@ import {
   restoreBuiltInPrompt,
   savePromptTemplate,
 } from "../storage/prompt-repository";
+import {
+  loadWritingProfile,
+  MAX_WRITING_PROFILE_LENGTH,
+  saveWritingProfile,
+} from "../storage/writing-profile-repository";
 
 interface PromptsPanelProps {
   copy: Messages;
@@ -67,13 +75,28 @@ export function PromptsPanel({ copy, onPromptsChanged }: PromptsPanelProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string>();
   const [confirmRestoreAll, setConfirmRestoreAll] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string }>();
+  const [writingProfile, setWritingProfile] = useState("");
+  const [creationPreferences, setCreationPreferences] = useState(
+    createDefaultCreationPreferences(),
+  );
 
   useEffect(() => {
     let active = true;
-    void loadResolvedPromptLibrary()
-      .then((resolved) => {
+    void Promise.all([loadResolvedPromptLibrary(), loadWritingProfile(), loadCreationPreferences()])
+      .then(([resolved, profile, preferences]) => {
         if (active) {
           setLibrary(resolved);
+          setWritingProfile(profile);
+          const defaultStyleId = resolved.active.some(
+            (template) => template.id === preferences.defaultStyleId,
+          )
+            ? preferences.defaultStyleId
+            : (resolved.active[0]?.id ?? "professional");
+          const nextPreferences = { ...preferences, defaultStyleId };
+          setCreationPreferences(nextPreferences);
+          if (defaultStyleId !== preferences.defaultStyleId) {
+            void saveCreationPreferences(nextPreferences);
+          }
         }
       })
       .catch(() => {
@@ -86,8 +109,16 @@ export function PromptsPanel({ copy, onPromptsChanged }: PromptsPanelProps) {
     };
   }, [copy.promptLoadError]);
 
-  const applyLibrary = (next: PromptLibraryV1, message: string) => {
-    setLibrary(resolvePromptLibrary(next));
+  const applyLibrary = async (next: PromptLibraryV1, message: string) => {
+    const resolved = resolvePromptLibrary(next);
+    setLibrary(resolved);
+    if (!resolved.active.some((template) => template.id === creationPreferences.defaultStyleId)) {
+      const preferences = {
+        ...creationPreferences,
+        defaultStyleId: resolved.active[0]?.id ?? "professional",
+      };
+      setCreationPreferences(await saveCreationPreferences(preferences));
+    }
     setFeedback({ kind: "success", text: message });
     onPromptsChanged();
   };
@@ -98,7 +129,7 @@ export function PromptsPanel({ copy, onPromptsChanged }: PromptsPanelProps) {
   ): Promise<boolean> => {
     setFeedback(undefined);
     try {
-      applyLibrary(await change(), message);
+      await applyLibrary(await change(), message);
       return true;
     } catch {
       setFeedback({ kind: "error", text: copy.promptSaveError });
@@ -134,12 +165,70 @@ export function PromptsPanel({ copy, onPromptsChanged }: PromptsPanelProps) {
     }
   };
 
+  const saveProfile = async () => {
+    setFeedback(undefined);
+    try {
+      setWritingProfile(await saveWritingProfile(writingProfile));
+      setFeedback({ kind: "success", text: copy.writingProfileSaved });
+      onPromptsChanged();
+    } catch {
+      setFeedback({ kind: "error", text: copy.writingProfileSaveError });
+    }
+  };
+
+  const setDefaultStyle = async (styleId: string) => {
+    setFeedback(undefined);
+    try {
+      const preferences = await saveCreationPreferences({
+        ...creationPreferences,
+        defaultStyleId: styleId,
+      });
+      setCreationPreferences(preferences);
+      setFeedback({ kind: "success", text: copy.defaultPromptSaved });
+      onPromptsChanged();
+    } catch {
+      setFeedback({ kind: "error", text: copy.promptSaveError });
+    }
+  };
+
   return (
     <div className="prompts-panel">
       <section className="section-heading" aria-labelledby="prompts-title">
         <p>{copy.promptsEyebrow}</p>
         <h1 id="prompts-title">{copy.promptsTitle}</h1>
         <span>{copy.promptsBody}</span>
+      </section>
+
+      <section className="writing-profile-card" aria-labelledby="writing-profile-title">
+        <div>
+          <h2 id="writing-profile-title">{copy.writingProfileTitle}</h2>
+          <p>{copy.writingProfileBody}</p>
+        </div>
+        <label className="form-field prompt-instruction-field" htmlFor="writing-profile">
+          <span>{copy.writingProfileLabel}</span>
+          <textarea
+            id="writing-profile"
+            aria-label={copy.writingProfileLabel}
+            value={writingProfile}
+            placeholder={copy.writingProfilePlaceholder}
+            maxLength={MAX_WRITING_PROFILE_LENGTH}
+            rows={8}
+            onChange={(event) => {
+              setWritingProfile(event.target.value);
+              setFeedback(undefined);
+            }}
+          />
+          <small>
+            {writingProfile.length.toLocaleString()} / {MAX_WRITING_PROFILE_LENGTH.toLocaleString()}
+          </small>
+        </label>
+        <div className="writing-profile-footer">
+          <small>{copy.writingProfileHint}</small>
+          <button type="button" className="primary-button" onClick={saveProfile}>
+            <FloppyDisk size={16} weight="bold" aria-hidden="true" />
+            {copy.saveWritingProfile}
+          </button>
+        </div>
       </section>
 
       <div className="prompts-toolbar">
@@ -221,6 +310,9 @@ export function PromptsPanel({ copy, onPromptsChanged }: PromptsPanelProps) {
                 <span>
                   {template.source === "built-in" ? copy.builtInPrompt : copy.customPrompt}
                   {template.isOverridden ? ` · ${copy.overriddenPrompt}` : ""}
+                  {creationPreferences.defaultStyleId === template.id
+                    ? ` · ${copy.defaultPrompt}`
+                    : ""}
                 </span>
               </div>
               <div className="prompt-order-actions">
@@ -253,6 +345,21 @@ export function PromptsPanel({ copy, onPromptsChanged }: PromptsPanelProps) {
             </div>
             <p>{template.instruction}</p>
             <div className="prompt-card-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={creationPreferences.defaultStyleId === template.id}
+                onClick={() => void setDefaultStyle(template.id)}
+              >
+                <Star
+                  size={15}
+                  weight={creationPreferences.defaultStyleId === template.id ? "fill" : "bold"}
+                  aria-hidden="true"
+                />
+                {creationPreferences.defaultStyleId === template.id
+                  ? copy.defaultPrompt
+                  : copy.setDefaultPrompt}
+              </button>
               <button
                 type="button"
                 className="secondary-button"

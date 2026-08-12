@@ -1,5 +1,9 @@
 import { AppError } from "../../core/errors/app-error";
 import type { ImageGenerationResult } from "../../core/image/types";
+import {
+  appendImageCanvasRequirement,
+  getExpectedImageDimensions,
+} from "../../core/image/dimensions";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
 import { fetchWithPolicy, readJsonResponse } from "../shared/http";
@@ -38,6 +42,7 @@ const findGeneratedImage = (
 export const geminiImageAdapter: ImageProviderAdapter = {
   id: "gemini",
   async generate(input, { profile, apiKey, signal }) {
+    const dimensions = getExpectedImageDimensions("gemini", input.size, input.aspectRatio);
     const response = await fetchWithPolicy(
       appendApiPath(profile.baseUrl, "/v1beta/interactions"),
       {
@@ -48,7 +53,7 @@ export const geminiImageAdapter: ImageProviderAdapter = {
         },
         body: JSON.stringify({
           model: profile.model,
-          input: input.prompt,
+          input: appendImageCanvasRequirement(input.prompt, input, dimensions),
           response_format: {
             type: "image",
             mime_type: "image/png",

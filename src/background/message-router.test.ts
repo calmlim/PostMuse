@@ -9,6 +9,7 @@ import { routeExtensionMessage } from "./message-router";
 import { savePromptTemplate } from "../storage/prompt-repository";
 import { listHistoryRecords } from "../storage/history-repository";
 import { takePendingXContext } from "../storage/pending-context";
+import { saveWritingProfile } from "../storage/writing-profile-repository";
 
 let local: StorageAreaMock;
 let session: StorageAreaMock;
@@ -17,6 +18,15 @@ const permissionGetAll = vi.fn();
 const permissionRemove = vi.fn();
 const fetchMock = vi.fn();
 const sidePanelOpen = vi.fn();
+
+const pngHeaderBase64 = (width: number, height: number): string => {
+  const bytes = new Uint8Array(24);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return btoa(String.fromCharCode(...bytes));
+};
 
 const trustedSender = {
   id: "extension-id",
@@ -150,6 +160,14 @@ describe("background message router", () => {
         locale: "en",
         configured: false,
         providerDisplayName: "OpenAI-compatible",
+        defaultStyleId: "professional",
+        preferences: {
+          candidateCount: 2,
+          length: "medium",
+          language: "follow-source",
+          replyIntent: "agree-and-add",
+          quoteIntent: "comment",
+        },
         styles: expect.arrayContaining([
           expect.objectContaining({ id: "professional", version: 1, isBuiltInDefault: true }),
         ]),
@@ -292,6 +310,7 @@ describe("background message router", () => {
       },
       trustedSender,
     );
+    await saveWritingProfile("I write as a practical independent developer.");
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({ choices: [{ message: { content: '{"text":"Stronger close"}' } }] }),
@@ -300,6 +319,13 @@ describe("background message router", () => {
     );
     const input = createGenerationInputFixture({
       contentType: "thread",
+      language: { mode: "fixed", value: "Simplified Chinese" },
+      length: "long",
+      audience: "solo founders",
+      goal: "share one useful lesson",
+      tone: "candid",
+      mustInclude: "a concrete example",
+      mustAvoid: "hype",
       candidateCount: 1,
       threadCount: 3,
     });
@@ -324,6 +350,47 @@ describe("background message router", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
     expect(JSON.stringify(body)).toContain("closing post or CTA");
     expect(JSON.stringify(body)).toContain("Development");
+    expect(body.messages[0].content).toContain("Write in Simplified Chinese");
+    expect(body.messages[0].content).toContain("180–280 Unicode characters per post");
+    expect(body.messages[0].content).toContain("Target audience: solo founders");
+    expect(body.messages[0].content).toContain("Content goal: share one useful lesson");
+    expect(body.messages[0].content).toContain("Additional tone: candid");
+    expect(body.messages[0].content).toContain("Must include: a concrete example");
+    expect(body.messages[0].content).toContain("Must avoid: hype");
+    expect(body.messages[0].content).toContain("I write as a practical independent developer.");
+  });
+
+  it("allows the X inline panel to regenerate one candidate through the narrow inline route", async () => {
+    const profile = { ...createDefaultProviderProfile(), model: "gpt-inline-regen" };
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "inline-regen-settings",
+        profile,
+        apiKey: "sk-inline-regen-secret",
+      },
+      trustedSender,
+    );
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"text":"New first option"}' } }] }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      routeExtensionMessage(
+        {
+          type: "inline.regenerate",
+          requestId: "inline-regen-1",
+          input: {
+            input: createGenerationInputFixture({ candidateCount: 2 }),
+            target: { kind: "candidate", index: 0, currentTexts: ["Old one", "Keep two"] },
+          },
+        },
+        xContentSender,
+      ),
+    ).resolves.toMatchObject({ ok: true, data: { text: "New first option" } });
   });
 
   it("generates for the X inline panel in the worker and saves structured history", async () => {
@@ -377,10 +444,9 @@ describe("background message router", () => {
       },
       trustedSender,
     );
+    const generatedImage = pngHeaderBase64(1024, 1024);
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ data: [{ b64_json: "aW1hZ2UtYnl0ZXM=" }] }), {
-        status: 200,
-      }),
+      new Response(JSON.stringify({ data: [{ b64_json: generatedImage }] }), { status: 200 }),
     );
 
     const response = await routeExtensionMessage(
@@ -401,7 +467,13 @@ describe("background message router", () => {
 
     expect(response).toMatchObject({
       ok: true,
-      data: { provider: "openai", mimeType: "image/png", base64Data: "aW1hZ2UtYnl0ZXM=" },
+      data: {
+        provider: "openai",
+        mimeType: "image/png",
+        base64Data: generatedImage,
+        pixelWidth: 1024,
+        pixelHeight: 1024,
+      },
     });
     expect(JSON.stringify(response)).not.toContain("image-router-secret");
     expect(permissionContains).toHaveBeenCalledWith({ origins: ["https://api.openai.com/*"] });

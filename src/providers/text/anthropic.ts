@@ -19,6 +19,7 @@ export const anthropicAdapter: TextProviderAdapter = {
         body: JSON.stringify({
           model: profile.model,
           max_tokens: profile.maxOutputTokens,
+          temperature: Math.min(profile.temperature, 1),
           system: request.system,
           messages: [{ role: "user", content: request.user }],
         }),

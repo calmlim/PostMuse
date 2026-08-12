@@ -19,6 +19,7 @@ import {
   saveApiKey,
 } from "../storage/secrets-repository";
 import { loadHistoryEnabled } from "../storage/history-preferences";
+import { loadCreationPreferences } from "../storage/creation-preferences";
 import { saveHistoryRecord } from "../storage/history-repository";
 import { savePendingXContext } from "../storage/pending-context";
 import { loadResolvedPromptLibrary } from "../storage/prompt-repository";
@@ -160,17 +161,19 @@ const handleRequest = async (
   }
 
   if (request.type === "inline.bootstrap") {
-    const settings = await loadSettings();
+    const [settings, promptLibrary, creationPreferences] = await Promise.all([
+      loadSettings(),
+      loadResolvedPromptLibrary(),
+      loadCreationPreferences(),
+    ]);
     const profile = getActiveProviderProfile(settings);
     const secretStatus = await getSecretStatus(createTextSecretBinding(profile));
-    const styles = (await loadResolvedPromptLibrary()).active.map(
-      ({ id, label, version, source, isOverridden }) => ({
-        id,
-        label,
-        version,
-        isBuiltInDefault: source === "built-in" && !isOverridden,
-      }),
-    );
+    const styles = promptLibrary.active.map(({ id, label, version, source, isOverridden }) => ({
+      id,
+      label,
+      version,
+      isBuiltInDefault: source === "built-in" && !isOverridden,
+    }));
     return {
       ok: true,
       data: {
@@ -179,6 +182,10 @@ const handleRequest = async (
         providerDisplayName: profile.displayName,
         model: profile.model.trim(),
         styles,
+        defaultStyleId: styles.some((style) => style.id === creationPreferences.defaultStyleId)
+          ? creationPreferences.defaultStyleId
+          : (styles[0]?.id ?? "professional"),
+        preferences: creationPreferences.inline,
       },
     };
   }
@@ -297,7 +304,7 @@ const handleRequest = async (
     return runGeneration(request.requestId, request.input, request.type === "inline.generate");
   }
 
-  if (request.type === "text.regenerate") {
+  if (request.type === "text.regenerate" || request.type === "inline.regenerate") {
     if (activeGenerationRequests.has(request.requestId)) {
       throw new AppError("INVALID_REQUEST", "A request with this id is already running.");
     }

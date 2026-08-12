@@ -334,6 +334,9 @@ export function ImageGenerator({
           <figcaption>
             <span>
               {copy.imageReady} · {result.aspectRatio} · {result.size}
+              {result.pixelWidth && result.pixelHeight
+                ? ` · ${result.pixelWidth}×${result.pixelHeight}`
+                : ""}
             </span>
             <button type="button" className="secondary-button" onClick={download}>
               <DownloadSimple size={17} weight="bold" aria-hidden="true" />

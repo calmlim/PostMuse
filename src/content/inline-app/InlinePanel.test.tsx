@@ -23,6 +23,14 @@ beforeEach(() => {
           configured: true,
           providerDisplayName: "OpenAI",
           model: "gpt-test",
+          defaultStyleId: "professional",
+          preferences: {
+            candidateCount: 2,
+            length: "medium",
+            language: "follow-source",
+            replyIntent: "agree-and-add",
+            quoteIntent: "comment",
+          },
           styles: [
             {
               id: "professional",
@@ -52,6 +60,16 @@ beforeEach(() => {
         },
       };
     }
+    if (request.type === "inline.regenerate") {
+      return {
+        ok: true,
+        data: {
+          text: "Only the first draft changed",
+          provider: "openai-compatible",
+          model: "gpt-test",
+        },
+      };
+    }
     return { ok: true, data: { opened: true } };
   });
   vi.stubGlobal("chrome", { runtime: { sendMessage: runtimeSendMessage } });
@@ -65,7 +83,8 @@ describe("InlinePanel", () => {
   it("excludes related context by default and includes it only after opt-in", async () => {
     render(<InlinePanel context={context} extractionFailed={false} onClose={vi.fn()} />);
     const generate = await screen.findByRole("button", { name: "Generate drafts" });
-    expect(screen.getByText("Quoted visible context")).toBeVisible();
+    expect(screen.queryByText("Main visible post")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quoted visible context")).not.toBeInTheDocument();
 
     fireEvent.click(generate);
     expect(await screen.findByLabelText("Draft 1")).toHaveValue("Draft one");
@@ -74,7 +93,7 @@ describe("InlinePanel", () => {
     )?.[0];
     expect(firstRequest.input.source.text).toBe("Main visible post");
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /Include quoted context/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Include related post/ }));
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));
     fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
     await waitFor(() =>
@@ -108,5 +127,37 @@ describe("InlinePanel", () => {
     expect(runtimeSendMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "inline.generate" }),
     );
+  });
+
+  it("places the side-panel action in the heading", async () => {
+    render(<InlinePanel context={context} extractionFailed={false} onClose={vi.fn()} />);
+
+    const action = await screen.findByRole("button", { name: "Open in side panel" });
+    expect(action.closest(".heading-actions")).not.toBeNull();
+    fireEvent.click(action);
+    await waitFor(() =>
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "inline.openSidePanel" }),
+      ),
+    );
+  });
+
+  it("regenerates only the selected inline draft with the original settings", async () => {
+    render(<InlinePanel context={context} extractionFailed={false} onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Generate drafts" }));
+    expect(await screen.findByLabelText("Draft 1")).toHaveValue("Draft one");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Regenerate" })[0]);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Draft 1")).toHaveValue("Only the first draft changed"),
+    );
+    expect(screen.getByLabelText("Draft 2")).toHaveValue("Draft two");
+    const regenerateRequest = runtimeSendMessage.mock.calls.find(
+      ([request]) => request.type === "inline.regenerate",
+    )?.[0];
+    expect(regenerateRequest.input).toMatchObject({
+      input: { length: "medium", candidateCount: 2 },
+      target: { kind: "candidate", index: 0 },
+    });
   });
 });

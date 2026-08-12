@@ -66,7 +66,7 @@ describe("text provider adapters", () => {
     });
   });
 
-  it("maps Anthropic Messages without unsupported sampling parameters", async () => {
+  it("maps Anthropic Messages with a supported temperature", async () => {
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -88,7 +88,7 @@ describe("text provider adapters", () => {
       "anthropic-version": "2023-06-01",
     });
     expect(body.system).toBe("Return JSON.");
-    expect(body).not.toHaveProperty("temperature");
+    expect(body.temperature).toBe(0.7);
   });
 
   it("maps Gemini generateContent with header authentication and JSON schema", async () => {

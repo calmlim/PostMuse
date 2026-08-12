@@ -9,6 +9,7 @@ import {
   SOURCE_KINDS,
   type GenerationInput,
   type RegenerationInput,
+  getCustomLengthBounds,
 } from "./types";
 
 export const MAX_SOURCE_CHARACTERS = 100_000;
@@ -44,6 +45,21 @@ export const isGenerationInput = (value: unknown): value is GenerationInput => {
     candidateCount < 1 ||
     candidateCount > 5
   ) {
+    return false;
+  }
+
+  const customLength = value.customLength;
+  if (value.length === "custom") {
+    const bounds = getCustomLengthBounds(contentType);
+    if (
+      typeof customLength !== "number" ||
+      !Number.isInteger(customLength) ||
+      customLength < bounds.min ||
+      customLength > bounds.max
+    ) {
+      return false;
+    }
+  } else if (customLength !== undefined) {
     return false;
   }
 

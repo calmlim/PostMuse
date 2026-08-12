@@ -1,4 +1,5 @@
 import { Sparkle } from "@phosphor-icons/react";
+import type { MouseEvent as ReactMouseEvent, SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { getMessages } from "../../i18n";
 import { InlinePanel } from "../inline-app/InlinePanel";
@@ -18,12 +19,23 @@ const triggerStyles = `
 const pageLocale = (): "en" | "zh-CN" =>
   document.documentElement.lang.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
 
+const isPostDetailPage = (): boolean =>
+  /^\/(?:i\/web|[^/]+)\/status\/\d+(?:\/|$)/.test(window.location.pathname);
+
 interface TriggerProps {
   onClick: () => void;
 }
 
 function InlineTrigger({ onClick }: TriggerProps) {
   const copy = getMessages(pageLocale());
+  const stopPointerPropagation = (event: SyntheticEvent) => {
+    event.stopPropagation();
+  };
+  const handleClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClick();
+  };
   return (
     <>
       <style>{triggerStyles}</style>
@@ -31,7 +43,9 @@ function InlineTrigger({ onClick }: TriggerProps) {
         type="button"
         title={copy.inlineTrigger}
         aria-label={copy.inlineTrigger}
-        onClick={onClick}
+        onClick={handleClick}
+        onPointerDown={stopPointerPropagation}
+        onPointerUp={stopPointerPropagation}
       >
         <Sparkle size={18} weight="fill" aria-hidden="true" />
       </button>
@@ -50,6 +64,12 @@ export const mountInlinePost = (
 
   const triggerHost = document.createElement("span");
   triggerHost.setAttribute(POSTMUSE_HOST_ATTRIBUTE, "trigger");
+  triggerHost.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  triggerHost.addEventListener("pointerdown", (event) => event.stopPropagation());
+  triggerHost.addEventListener("pointerup", (event) => event.stopPropagation());
   const triggerShadow = triggerHost.attachShadow({ mode: "open" });
   const triggerRoot = createRoot(triggerShadow);
 
@@ -57,6 +77,9 @@ export const mountInlinePost = (
   panelHost.setAttribute(POSTMUSE_HOST_ATTRIBUTE, "panel");
   panelHost.style.display = "block";
   panelHost.style.width = "100%";
+  panelHost.addEventListener("click", (event) => event.stopPropagation());
+  panelHost.addEventListener("pointerdown", (event) => event.stopPropagation());
+  panelHost.addEventListener("pointerup", (event) => event.stopPropagation());
   const panelShadow = panelHost.attachShadow({ mode: "open" });
   const panelRoot = createRoot(panelShadow);
 
@@ -71,6 +94,7 @@ export const mountInlinePost = (
         <InlinePanel
           context={contextResult?.ok ? contextResult.context : undefined}
           extractionFailed={!contextResult?.ok}
+          initialAction={isPostDetailPage() ? "reply" : "rewrite"}
           onClose={() => mounted.close(true)}
         />
       ) : null,

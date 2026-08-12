@@ -31,6 +31,8 @@ export interface ImageGenerationResult {
   size: ImageSize;
   mimeType: "image/png" | "image/jpeg" | "image/webp";
   base64Data: string;
+  pixelWidth?: number;
+  pixelHeight?: number;
 }
 
 export interface ImageHistoryMetadata {

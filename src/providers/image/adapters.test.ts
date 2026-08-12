@@ -55,7 +55,9 @@ describe("image provider adapters", () => {
     expect(init.headers).toMatchObject({ authorization: "Bearer test-image-secret" });
     expect(JSON.parse(String(init.body))).toEqual({
       model: "test-image-model",
-      prompt: input.prompt,
+      prompt: expect.stringContaining(
+        "Required output canvas: 16:9 aspect ratio, 2048×1152 pixels",
+      ),
       n: 1,
       size: "2048x1152",
       output_format: "png",
@@ -91,7 +93,7 @@ describe("image provider adapters", () => {
     expect(init.headers).toMatchObject({ "x-goog-api-key": "test-image-secret" });
     expect(JSON.parse(String(init.body))).toMatchObject({
       model: "test-image-model",
-      input: input.prompt,
+      input: expect.stringContaining("Required output canvas: 16:9 aspect ratio, 2752×1536 pixels"),
       response_format: {
         type: "image",
         mime_type: "image/png",

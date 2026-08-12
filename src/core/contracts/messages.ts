@@ -15,6 +15,7 @@ import type {
 import { isGenerationInput, isRegenerationInput } from "../generation/validation";
 import type { ImageGenerationInput, ImageGenerationResult } from "../image/types";
 import { isImageGenerationInput } from "../image/validation";
+import type { CreationPreferencesV1 } from "../preferences/creation";
 
 export const MESSAGE_TYPES = [
   "settings.get",
@@ -31,6 +32,7 @@ export const MESSAGE_TYPES = [
   "data.reset",
   "inline.bootstrap",
   "inline.generate",
+  "inline.regenerate",
   "inline.cancel",
   "inline.openSidePanel",
 ] as const;
@@ -62,6 +64,7 @@ export type ExtensionRequest =
   | { type: "data.reset"; requestId: string }
   | { type: "inline.bootstrap"; requestId: string }
   | { type: "inline.generate"; requestId: string; input: GenerationInput }
+  | { type: "inline.regenerate"; requestId: string; input: RegenerationInput }
   | { type: "inline.cancel"; requestId: string; targetRequestId: string }
   | { type: "inline.openSidePanel"; requestId: string; input?: GenerationInput };
 
@@ -71,6 +74,8 @@ export interface InlineBootstrap {
   providerDisplayName: string;
   model: string;
   styles: Array<{ id: string; label: string; version: number; isBuiltInDefault: boolean }>;
+  defaultStyleId: string;
+  preferences: CreationPreferencesV1["inline"];
 }
 
 export interface ExtensionError {
@@ -118,6 +123,7 @@ export interface ExtensionResponseMap {
   "data.reset": { snapshot: SettingsSnapshot; remainingOriginCount: number };
   "inline.bootstrap": InlineBootstrap;
   "inline.generate": GenerationResult;
+  "inline.regenerate": RegenerationResult;
   "inline.cancel": { cancelled: boolean };
   "inline.openSidePanel": { opened: true };
 }
@@ -165,7 +171,7 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
     return isGenerationInput(value.input);
   }
 
-  if (value.type === "text.regenerate") {
+  if (value.type === "text.regenerate" || value.type === "inline.regenerate") {
     return isRegenerationInput(value.input);
   }
 

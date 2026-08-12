@@ -89,6 +89,31 @@ describe("Side Panel App", () => {
     expect(screen.getByRole("button", { name: "Prompts" })).toBeVisible();
   });
 
+  it("shows content-specific character and paragraph ranges", () => {
+    render(<App />);
+
+    const length = screen.getByLabelText("Length");
+    expect(length).toHaveDisplayValue("Medium · 100–200 chars");
+
+    fireEvent.click(screen.getByRole("button", { name: "Thread" }));
+    expect(length).toHaveDisplayValue("Medium · 100–180 chars/post");
+
+    fireEvent.click(screen.getByRole("button", { name: "Premium long post" }));
+    expect(length).toHaveDisplayValue("Medium · 600–1,200 chars · 4–6 paragraphs");
+  });
+
+  it("offers a per-task custom character target without changing the presets", async () => {
+    render(<App />);
+    const length = screen.getByLabelText("Length");
+
+    fireEvent.change(length, { target: { value: "custom" } });
+    const standardTarget = screen.getByLabelText("Target characters");
+    expect(standardTarget).toHaveAttribute("max", "280");
+
+    fireEvent.click(screen.getByRole("button", { name: "Premium long post" }));
+    expect(await screen.findByLabelText("Target characters")).toHaveAttribute("max", "25000");
+  });
+
   it("switches to Chinese and stores the preference", async () => {
     render(<App />);
 

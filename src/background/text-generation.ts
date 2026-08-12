@@ -5,6 +5,7 @@ import { buildTextGenerationRequest } from "../core/prompts/prompt-builder";
 import type { ProviderProfile } from "../core/settings/types";
 import { getTextProviderAdapter } from "../providers/text";
 import { findActivePrompt } from "../storage/prompt-repository";
+import { loadWritingProfile } from "../storage/writing-profile-repository";
 
 export const generateText = async (
   input: GenerationInput,
@@ -24,7 +25,7 @@ export const generateText = async (
     throw new AppError("STYLE_NOT_FOUND", "Choose an available style before generating.");
   }
 
-  const request = buildTextGenerationRequest(input, style);
+  const request = buildTextGenerationRequest(input, style, await loadWritingProfile());
   const response = await getTextProviderAdapter(profile.provider).generate(request, {
     profile,
     apiKey,

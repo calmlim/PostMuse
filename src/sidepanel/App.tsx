@@ -1,11 +1,6 @@
-import {
-  ClockCounterClockwise,
-  GearSix,
-  MagicWand,
-  PencilSimple,
-  Sparkle,
-} from "@phosphor-icons/react";
+import { ClockCounterClockwise, GearSix, MagicWand, PencilSimple } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import { BrandMark } from "../components/BrandMark";
 import { createRequestId } from "../core/contracts/messages";
 import type { GenerationInput } from "../core/generation/types";
 import { DEFAULT_LOCALE, getMessages, type Locale } from "../i18n";
@@ -99,7 +94,7 @@ export function App() {
       <header className="app-header">
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true">
-            <Sparkle size={18} weight="fill" />
+            <BrandMark />
           </span>
           <div>
             <div className="brand-name">{copy.appName}</div>

@@ -27,6 +27,7 @@ import type {
 } from "../core/settings/types";
 import { supportsInsecureLocalhost } from "../core/settings/runtime-capabilities";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
+import { CreationPreferencesPanel } from "./CreationPreferencesPanel";
 import { PrivacyDataPanel } from "./PrivacyDataPanel";
 
 interface SettingsPanelProps {
@@ -321,6 +322,12 @@ export function SettingsPanel({
         <span>{copy.settingsBody}</span>
       </div>
 
+      <CreationPreferencesPanel
+        copy={copy}
+        revision={historyRevision}
+        onChanged={onSettingsChanged}
+      />
+
       <div className="settings-card">
         <div className="settings-card-heading">
           <div>
@@ -456,12 +463,13 @@ export function SettingsPanel({
               <input
                 type="number"
                 min="0"
-                max="2"
+                max="1"
                 step="0.1"
                 value={profile.temperature}
                 onChange={(event) => updateProfile("temperature", Number(event.target.value))}
                 disabled={isLoading || isBusy}
               />
+              <small>{copy.temperatureHint}</small>
             </label>
 
             <label className="form-field">

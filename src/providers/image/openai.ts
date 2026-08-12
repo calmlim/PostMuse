@@ -1,18 +1,17 @@
 import { AppError } from "../../core/errors/app-error";
-import type { ImageAspectRatio, ImageSize } from "../../core/image/types";
+import {
+  appendImageCanvasRequirement,
+  getExpectedImageDimensions,
+} from "../../core/image/dimensions";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
 import { fetchWithPolicy, readJsonResponse } from "../shared/http";
 import type { ImageProviderAdapter } from "./types";
 
-const OPENAI_SIZE_MAP: Record<ImageSize, Record<ImageAspectRatio, string>> = {
-  "1K": { "1:1": "1024x1024", "16:9": "1536x864", "9:16": "864x1536" },
-  "2K": { "1:1": "2048x2048", "16:9": "2048x1152", "9:16": "1152x2048" },
-};
-
 export const openAIImageAdapter: ImageProviderAdapter = {
   id: "openai",
   async generate(input, { profile, apiKey, signal }) {
+    const dimensions = getExpectedImageDimensions("openai", input.size, input.aspectRatio);
     const response = await fetchWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/images/generations"),
       {
@@ -23,9 +22,9 @@ export const openAIImageAdapter: ImageProviderAdapter = {
         },
         body: JSON.stringify({
           model: profile.model,
-          prompt: input.prompt,
+          prompt: appendImageCanvasRequirement(input.prompt, input, dimensions),
           n: 1,
-          size: OPENAI_SIZE_MAP[input.size][input.aspectRatio],
+          size: `${dimensions.width}x${dimensions.height}`,
           output_format: "png",
         }),
       },

@@ -18,6 +18,7 @@ import type {
   RegenerationInput,
   SourceKind,
 } from "../core/generation/types";
+import { getCustomLengthBounds } from "../core/generation/types";
 import type { ImageHistoryMetadata } from "../core/image/types";
 import { MAX_FILE_BYTES, MAX_SOURCE_CHARACTERS } from "../core/generation/validation";
 import {
@@ -27,8 +28,10 @@ import {
 } from "../core/prompts/library";
 import { PROMPT_RECIPE_VERSION } from "../core/prompts/prompt-builder";
 import type { ProviderProfile, SettingsSnapshot } from "../core/settings/types";
+import { createDefaultCreationPreferences } from "../core/preferences/creation";
 import type { Messages } from "../i18n";
 import { loadCreateAdvancedOpen, saveCreateAdvancedOpen } from "../storage/create-ui-preferences";
+import { loadCreationPreferences } from "../storage/creation-preferences";
 import { loadHistoryEnabled } from "../storage/history-preferences";
 import {
   saveHistoryRecord,
@@ -58,6 +61,7 @@ interface DraftForm {
   customLanguage: string;
   styleId: string;
   length: OutputLength;
+  customLength: number;
   audience: string;
   goal: string;
   tone: string;
@@ -76,6 +80,7 @@ const initialForm: DraftForm = {
   customLanguage: "",
   styleId: "professional",
   length: "medium",
+  customLength: 180,
   audience: "",
   goal: "",
   tone: "",
@@ -86,6 +91,28 @@ const initialForm: DraftForm = {
 };
 
 const defaultActiveStyles = resolvePromptLibrary(createDefaultPromptLibrary()).active;
+
+const getLengthLabels = (contentType: ContentType, copy: Messages): Record<OutputLength, string> =>
+  contentType === "thread"
+    ? {
+        short: copy.lengthThreadShort,
+        medium: copy.lengthThreadMedium,
+        long: copy.lengthThreadLong,
+        custom: copy.lengthCustom,
+      }
+    : contentType === "long-post"
+      ? {
+          short: copy.lengthLongPostShort,
+          medium: copy.lengthLongPostMedium,
+          long: copy.lengthLongPostLong,
+          custom: copy.lengthCustom,
+        }
+      : {
+          short: copy.lengthShort,
+          medium: copy.lengthMedium,
+          long: copy.lengthLong,
+          custom: copy.lengthCustom,
+        };
 
 const getActiveProfile = (snapshot: SettingsSnapshot): ProviderProfile | undefined =>
   snapshot.settings.textProviderProfiles.find(
@@ -141,7 +168,11 @@ export function CreatePanel({
   const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
   const [lastHistoryId, setLastHistoryId] = useState<string>();
   const [regeneratingTarget, setRegeneratingTarget] = useState<string>();
+  const [creationPreferences, setCreationPreferences] = useState(
+    createDefaultCreationPreferences(),
+  );
   const activeRequestId = useRef<string | undefined>(undefined);
+  const hasUserEditedRef = useRef(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revisions are explicit reload signals.
   useEffect(() => {
@@ -151,19 +182,47 @@ export function CreatePanel({
       loadCreateAdvancedOpen(),
       loadResolvedPromptLibrary(),
       loadHistoryEnabled(),
-    ]).then(([settingsSnapshot, storedAdvancedOpen, promptLibrary, storedHistoryEnabled]) => {
-      if (active) {
-        setSnapshot(settingsSnapshot);
-        setAdvancedOpen(storedAdvancedOpen);
-        setStyles(promptLibrary.active);
-        setHistoryEnabled(storedHistoryEnabled);
-        setForm((current) =>
-          promptLibrary.active.some((style) => style.id === current.styleId)
-            ? current
-            : { ...current, styleId: promptLibrary.active[0]?.id ?? "professional" },
-        );
-      }
-    });
+      loadCreationPreferences(),
+    ]).then(
+      ([
+        settingsSnapshot,
+        storedAdvancedOpen,
+        promptLibrary,
+        storedHistoryEnabled,
+        preferences,
+      ]) => {
+        if (active) {
+          setSnapshot(settingsSnapshot);
+          setAdvancedOpen(storedAdvancedOpen);
+          setStyles(promptLibrary.active);
+          setHistoryEnabled(storedHistoryEnabled);
+          setCreationPreferences(preferences);
+          const preferredStyle = promptLibrary.active.some(
+            (style) => style.id === preferences.defaultStyleId,
+          )
+            ? preferences.defaultStyleId
+            : (promptLibrary.active[0]?.id ?? "professional");
+          setForm((current) => {
+            if (current.text.trim() || hasUserEditedRef.current) {
+              return promptLibrary.active.some((style) => style.id === current.styleId)
+                ? current
+                : { ...current, styleId: preferredStyle };
+            }
+            return {
+              ...current,
+              languageValue: preferences.create.language,
+              styleId: preferredStyle,
+              length: preferences.create.length,
+              candidateCount:
+                current.contentType === "thread" || current.contentType === "long-post"
+                  ? 1
+                  : preferences.create.candidateCount,
+              threadCount: preferences.create.threadCount,
+            };
+          });
+        }
+      },
+    );
 
     return () => {
       active = false;
@@ -176,6 +235,7 @@ export function CreatePanel({
       return;
     }
     const { input } = historyDraft;
+    hasUserEditedRef.current = true;
     const knownLanguage = input.language.value;
     const languageValue: DraftForm["languageValue"] =
       input.language.mode === "follow-source"
@@ -194,6 +254,7 @@ export function CreatePanel({
         ? input.styleId
         : (styles[0]?.id ?? "professional"),
       length: input.length,
+      customLength: input.customLength ?? getCustomLengthBounds(input.contentType).defaultValue,
       audience: input.audience ?? "",
       goal: input.goal ?? "",
       tone: input.tone ?? "",
@@ -211,11 +272,13 @@ export function CreatePanel({
   }, [historyDraft?.requestId]);
 
   const updateForm = <K extends keyof DraftForm>(key: K, value: DraftForm[K]) => {
+    hasUserEditedRef.current = true;
     setForm((current) => ({ ...current, [key]: value }));
     setError(undefined);
   };
 
   const selectContentType = (contentType: ContentType) => {
+    hasUserEditedRef.current = true;
     setForm((current) => ({
       ...current,
       contentType,
@@ -225,7 +288,15 @@ export function CreatePanel({
           : contentType === "reply"
             ? "agree-and-add"
             : current.intent,
-      candidateCount: contentType === "thread" || contentType === "long-post" ? 1 : 3,
+      candidateCount:
+        contentType === "thread" || contentType === "long-post"
+          ? 1
+          : creationPreferences.create.candidateCount,
+      customLength:
+        current.customLength >= getCustomLengthBounds(contentType).min &&
+        current.customLength <= getCustomLengthBounds(contentType).max
+          ? current.customLength
+          : getCustomLengthBounds(contentType).defaultValue,
     }));
     setError(undefined);
   };
@@ -259,6 +330,7 @@ export function CreatePanel({
         return;
       }
       setForm((current) => ({ ...current, sourceKind: "file", text }));
+      hasUserEditedRef.current = true;
       setFileName(file.name);
       setError(undefined);
     } catch {
@@ -280,6 +352,7 @@ export function CreatePanel({
           },
     styleId: form.styleId,
     length: form.length,
+    customLength: form.length === "custom" ? form.customLength : undefined,
     audience: form.audience.trim() || undefined,
     goal: form.goal.trim() || undefined,
     tone: form.tone.trim() || undefined,
@@ -367,6 +440,21 @@ export function CreatePanel({
     if (form.languageValue === "custom" && !form.customLanguage.trim()) {
       setError(copy.customLanguageRequired);
       return;
+    }
+    if (form.length === "custom") {
+      const bounds = getCustomLengthBounds(form.contentType);
+      if (
+        !Number.isInteger(form.customLength) ||
+        form.customLength < bounds.min ||
+        form.customLength > bounds.max
+      ) {
+        setError(
+          copy.customLengthRangeError
+            .replace("{min}", bounds.min.toLocaleString())
+            .replace("{max}", bounds.max.toLocaleString()),
+        );
+        return;
+      }
     }
     if (!profile || !isConfigured) {
       onOpenSettings();
@@ -537,6 +625,7 @@ export function CreatePanel({
     "product-launch": copy.styleProductLaunch,
     "personal-reflection": copy.stylePersonalReflection,
   };
+  const lengthLabels = getLengthLabels(form.contentType, copy);
 
   return (
     <div className="create-panel">
@@ -728,11 +817,40 @@ export function CreatePanel({
               onChange={(event) => updateForm("length", event.target.value as OutputLength)}
               disabled={isGenerating}
             >
-              <option value="short">{copy.lengthShort}</option>
-              <option value="medium">{copy.lengthMedium}</option>
-              <option value="long">{copy.lengthLong}</option>
+              <option value="short">{lengthLabels.short}</option>
+              <option value="medium">{lengthLabels.medium}</option>
+              <option value="long">{lengthLabels.long}</option>
+              <option value="custom">{lengthLabels.custom}</option>
             </select>
           </label>
+
+          {form.length === "custom" ? (
+            <label className="form-field field-wide compact-number-field">
+              <span>
+                {form.contentType === "thread"
+                  ? copy.customLengthPerPostLabel
+                  : copy.customLengthLabel}
+              </span>
+              <input
+                type="number"
+                aria-label={
+                  form.contentType === "thread"
+                    ? copy.customLengthPerPostLabel
+                    : copy.customLengthLabel
+                }
+                min={getCustomLengthBounds(form.contentType).min}
+                max={getCustomLengthBounds(form.contentType).max}
+                value={form.customLength}
+                onChange={(event) => updateForm("customLength", Number(event.target.value))}
+                disabled={isGenerating}
+              />
+              <small>
+                {copy.customLengthRangeHint
+                  .replace("{min}", getCustomLengthBounds(form.contentType).min.toLocaleString())
+                  .replace("{max}", getCustomLengthBounds(form.contentType).max.toLocaleString())}
+              </small>
+            </label>
+          ) : null}
         </div>
 
         <button

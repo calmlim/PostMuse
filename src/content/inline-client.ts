@@ -3,11 +3,12 @@ import {
   type ExtensionResponse,
   type ExtensionResponseMap,
 } from "../core/contracts/messages";
-import type { GenerationInput } from "../core/generation/types";
+import type { GenerationInput, RegenerationInput } from "../core/generation/types";
 
 type InlineRequestInput =
   | { type: "inline.bootstrap" }
   | { type: "inline.generate"; input: GenerationInput }
+  | { type: "inline.regenerate"; input: RegenerationInput }
   | { type: "inline.cancel"; targetRequestId: string }
   | { type: "inline.openSidePanel"; input?: GenerationInput };
 

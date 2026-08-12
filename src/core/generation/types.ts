@@ -2,7 +2,7 @@ import type { ProviderId } from "../settings/types";
 
 export const CONTENT_TYPES = ["post", "reply", "quote", "thread", "long-post"] as const;
 export const SOURCE_KINDS = ["idea", "draft", "file"] as const;
-export const OUTPUT_LENGTHS = ["short", "medium", "long"] as const;
+export const OUTPUT_LENGTHS = ["short", "medium", "long", "custom"] as const;
 export const LANGUAGE_MODES = ["follow-source", "fixed"] as const;
 export const REPLY_INTENTS = [
   "agree-and-add",
@@ -32,6 +32,7 @@ export interface GenerationInput {
   };
   styleId: string;
   length: OutputLength;
+  customLength?: number;
   audience?: string;
   goal?: string;
   tone?: string;
@@ -40,6 +41,11 @@ export interface GenerationInput {
   candidateCount: number;
   threadCount?: number;
 }
+
+export const getCustomLengthBounds = (contentType: ContentType) =>
+  contentType === "long-post"
+    ? { min: 100, max: 25_000, defaultValue: 2_000 }
+    : { min: 1, max: 280, defaultValue: 180 };
 
 export interface GeneratedText {
   id: string;

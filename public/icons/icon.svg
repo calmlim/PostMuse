@@ -1,8 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="PostMuse">
-  <rect width="128" height="128" rx="28" fill="#182033"/>
-  <path d="M35 88.5 42.2 69 70 41.2a9 9 0 0 1 12.7 0l4.1 4.1a9 9 0 0 1 0 12.7L59 85.8 39.5 93a3.6 3.6 0 0 1-4.5-4.5Z" fill="#F4F7FC"/>
-  <path d="m66 45 17 17" fill="none" stroke="#8AAFFF" stroke-width="8" stroke-linecap="round"/>
-  <path d="m39 89 12-4-8-8-4 12Z" fill="#8AAFFF"/>
-  <path d="m96 25 2.8 8.2L107 36l-8.2 2.8L96 47l-2.8-8.2L85 36l8.2-2.8L96 25Z" fill="#8AAFFF"/>
-  <circle cx="102" cy="61" r="4" fill="#8AAFFF"/>
+  <rect width="128" height="128" rx="26" fill="#315FD0"/>
+  <path d="M64 16c-3.5 14.5-10.4 24-23.5 29 9.3 2.4 13.5 8.5 9 17H36l25 50h6l25-50H78.5c-4.5-8.5-.3-14.6 9-17C74.4 40 67.5 30.5 64 16Z" fill="#F7F5F0"/>
+  <path d="M64 27c2.3 9.7 7.8 15.3 17.5 18-9.7 2.7-15.2 8.3-17.5 18-2.3-9.7-7.8-15.3-17.5-18 9.7-2.7 15.2-8.3 17.5-18Z" fill="#EE763B"/>
+  <circle cx="64" cy="72" r="6" fill="#315FD0"/>
+  <path d="M64 76v35" stroke="#315FD0" stroke-width="5"/>
 </svg>

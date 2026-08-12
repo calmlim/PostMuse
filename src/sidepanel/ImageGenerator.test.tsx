@@ -36,6 +36,8 @@ describe("ImageGenerator", () => {
         size: "1K",
         mimeType: "image/png",
         base64Data: "aW1hZ2U=",
+        pixelWidth: 1024,
+        pixelHeight: 1024,
       },
     });
     const onGenerated = vi.fn();
@@ -64,6 +66,7 @@ describe("ImageGenerator", () => {
       "src",
       "blob:postmuse-image",
     );
+    expect(screen.getByText("Image ready · 1:1 · 1K · 1024×1024")).toBeInTheDocument();
     expect(permissionRequest).toHaveBeenCalledWith({ origins: ["https://api.openai.com/*"] });
     expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "image.generate" }));
     expect(onGenerated).toHaveBeenCalledWith(

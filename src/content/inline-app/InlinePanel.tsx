@@ -1,7 +1,21 @@
-import { Copy, GearSix, Sparkle, StopCircle, WarningCircle, X } from "@phosphor-icons/react";
+import {
+  Copy,
+  GearSix,
+  SidebarSimple,
+  Sparkle,
+  StopCircle,
+  WarningCircle,
+  X,
+} from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BrandMark } from "../../components/BrandMark";
 import { createRequestId, type InlineBootstrap } from "../../core/contracts/messages";
-import type { ContentType, GenerationInput, GenerationResult } from "../../core/generation/types";
+import type {
+  ContentType,
+  GenerationInput,
+  GenerationResult,
+  RegenerationInput,
+} from "../../core/generation/types";
 import { getMessages } from "../../i18n";
 import { sendInlineRequest } from "../inline-client";
 import type { XPostContext } from "../x-adapter/types";
@@ -9,6 +23,7 @@ import type { XPostContext } from "../x-adapter/types";
 interface InlinePanelProps {
   context?: XPostContext;
   extractionFailed: boolean;
+  initialAction?: InlineAction;
   onClose: () => void;
 }
 
@@ -20,25 +35,23 @@ const panelStyles = `
   * { box-sizing: border-box; }
   button, select, textarea, input { font: inherit; }
   .panel { margin: 12px 0 6px; overflow: hidden; border: 1px solid #deddd6; border-radius: 14px; background: #fdfcf9; color: #171816; box-shadow: 0 12px 32px rgba(35,34,29,.09); font: 13px/1.45 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-  .heading, .actions, .result-heading, .brand-heading, .result-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .heading, .heading-actions, .actions, .result-heading, .brand-heading, .result-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .heading { padding: 14px 16px; border-bottom: 1px solid #e5e3dc; }
   .brand-heading { justify-content: flex-start; min-width: 0; }
   .brand-spark { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; color: #ee763b; }
   .brand-copy { display: grid; min-width: 0; gap: 1px; }
   .brand-copy strong { font-size: 15px; font-weight: 780; letter-spacing: -.025em; }
   .brand-copy span { color: #6d6c62; font-size: 10.5px; }
+  .heading-actions { justify-content: flex-end; gap: 2px; }
   .icon { display: grid; width: 38px; height: 38px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #77766e; cursor: pointer; }
   .icon:hover { background: #edf2ff; color: #315fd0; }
   .workspace { padding: 14px 16px 2px; }
-  .source { margin: 0; padding: 0 0 13px; border-bottom: 1px solid #e5e3dc; }
-  .source + .source { padding-top: 12px; }
-  .source strong, label > span, fieldset legend { display: block; margin-bottom: 6px; font-size: 10.5px; font-weight: 700; }
-  .source p { display: -webkit-box; margin: 0; overflow: hidden; color: #5f5e57; font-size: 12px; line-height: 1.5; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-  .context { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; color: #41413c; font-size: 10.5px; cursor: pointer; }
+  label > span, fieldset legend { display: block; margin-bottom: 6px; font-size: 10.5px; font-weight: 700; }
+  .context { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; padding: 9px 10px; border-radius: 9px; background: #f5f6f8; color: #41413c; font-size: 10.5px; cursor: pointer; }
   .context input { margin-top: 2px; accent-color: #315fca; }
   .context span { display: grid; gap: 2px; }
   .context small { color: #77766e; font-size: 9.5px; }
-  fieldset { display: flex; gap: 0; margin: 13px 0 0; padding: 0; overflow: hidden; border: 1px solid #cbc9c0; border-radius: 9px; }
+  fieldset { display: flex; gap: 0; margin: 0; padding: 0; overflow: hidden; border: 1px solid #cbc9c0; border-radius: 9px; }
   fieldset legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
   .choice { flex: 1; min-height: 42px; border: 0; border-right: 1px solid #deddd6; background: #fffdfa; color: #5f5e57; cursor: pointer; font-size: 11px; font-weight: 680; }
   .choice:last-child { border-right: 0; }
@@ -46,10 +59,9 @@ const panelStyles = `
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 13px; }
   label select { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #cbc9c0; border-radius: 9px; background: #fffdfa; color: #171816; font-size: 11px; }
   .actions { justify-content: flex-end; margin-top: 13px; padding: 0 16px 14px; }
-  .primary, .secondary, .text-button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; border-radius: 9px; cursor: pointer; font-size: 11px; font-weight: 700; }
+  .primary, .secondary { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; border-radius: 9px; cursor: pointer; font-size: 11px; font-weight: 700; }
   .primary { min-width: 142px; border: 1px solid #315fd0; background: #315fd0; color: #fff; }
   .secondary { border: 0; background: transparent; color: #315fd0; }
-  .text-button { width: 100%; border: 0; border-radius: 0; background: transparent; color: #315fd0; }
   .primary:disabled { cursor: wait; opacity: .62; }
   .notice, .error { display: flex; align-items: flex-start; gap: 7px; margin: 12px 16px 0; padding: 10px; border-radius: 9px; font-size: 10px; }
   .notice { background: #eef3ff; color: #315fca; }
@@ -63,17 +75,16 @@ const panelStyles = `
   .result textarea { width: 100%; min-height: 90px; resize: vertical; padding: 11px 12px; border: 1px solid #cbc9c0; border-radius: 9px; background: #fffdfa; color: #171816; font-size: 12px; line-height: 1.5; }
   .result-actions { justify-content: flex-end; }
   .result .secondary { min-height: 36px; padding: 6px 8px; }
-  .footer-action { padding: 5px 16px 8px; }
   .status { padding: 0 16px 8px; color: #315fd0; font-size: 9.5px; text-align: right; }
   button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid #315fca; outline-offset: 2px; }
   @media (prefers-color-scheme: dark) {
     .panel { border-color: #3b3b37; background: #191a18; color: #f2f0e9; }
-    .heading, .source, .results, .result { border-color: #353631; }
+    .heading, .results, .result { border-color: #353631; }
     .result textarea, .choice, label select { border-color: #454640; background: #22231f; color: #f2f0e9; }
-    .source p, .context small, .brand-copy span { color: #aaa99f; }
-    .context { color: #dce3ed; }
+    .context small, .brand-copy span { color: #aaa99f; }
+    .context { background: #22231f; color: #dce3ed; }
     .choice[data-active="true"], .notice { background: #202d48; color: #8aafff; }
-    .secondary, .text-button { color: #8aafff; }
+    .secondary { color: #8aafff; }
     .error { background: #3c2424; color: #ffb5aa; }
   }
 `;
@@ -83,9 +94,14 @@ const getErrorCopy = (error: unknown, copy: ReturnType<typeof getMessages>): str
     ? copy.inlinePermissionError
     : copy.inlineRuntimeError;
 
-export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelProps) {
+export function InlinePanel({
+  context,
+  extractionFailed,
+  initialAction = "rewrite",
+  onClose,
+}: InlinePanelProps) {
   const [bootstrap, setBootstrap] = useState<InlineBootstrap>();
-  const [action, setAction] = useState<InlineAction>("rewrite");
+  const [action, setAction] = useState<InlineAction>(initialAction);
   const [language, setLanguage] = useState<InlineLanguage>("follow-source");
   const [styleId, setStyleId] = useState("professional");
   const [includeContext, setIncludeContext] = useState(false);
@@ -93,6 +109,8 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
   const [error, setError] = useState<string>();
   const [copyStatus, setCopyStatus] = useState<string>();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number>();
+  const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
   const activeRequestId = useRef<string | undefined>(undefined);
   const copy = getMessages(bootstrap?.locale ?? "en");
   const styleLabels: Record<string, string> = {
@@ -115,7 +133,8 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
       .then((value) => {
         if (active) {
           setBootstrap(value);
-          setStyleId(value.styles[0]?.id ?? "professional");
+          setStyleId(value.defaultStyleId);
+          setLanguage(value.preferences.language);
         }
       })
       .catch(() => {
@@ -162,8 +181,14 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
           ? { mode: "follow-source" }
           : { mode: "fixed", value: language },
       styleId,
-      length: "medium",
-      candidateCount: 3,
+      length: bootstrap?.preferences.length ?? "medium",
+      intent:
+        action === "reply"
+          ? bootstrap?.preferences.replyIntent
+          : action === "quote"
+            ? bootstrap?.preferences.quoteIntent
+            : undefined,
+      candidateCount: bootstrap?.preferences.candidateCount ?? 2,
     };
   };
 
@@ -176,12 +201,11 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
     setIsGenerating(true);
     setError(undefined);
     try {
-      const generated = await sendInlineRequest(
-        { type: "inline.generate", input: buildInput() },
-        { requestId },
-      );
+      const input = buildInput();
+      const generated = await sendInlineRequest({ type: "inline.generate", input }, { requestId });
       if (activeRequestId.current === requestId) {
         setResult(generated);
+        setLastGenerationInput(input);
       }
     } catch (generationError) {
       if (activeRequestId.current === requestId) {
@@ -195,6 +219,56 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
     }
   };
 
+  const regenerateItem = async (index: number) => {
+    if (!result || !lastGenerationInput) {
+      return;
+    }
+    const currentTexts =
+      result.format === "candidates"
+        ? result.candidates.map((item) => item.text)
+        : result.format === "raw"
+          ? [result.rawText]
+          : [];
+    if (currentTexts.length === 0) {
+      return;
+    }
+    const target: RegenerationInput["target"] = { kind: "candidate", index, currentTexts };
+    const requestId = createRequestId();
+    activeRequestId.current = requestId;
+    setIsGenerating(true);
+    setRegeneratingIndex(index);
+    setError(undefined);
+    try {
+      const regenerated = await sendInlineRequest(
+        { type: "inline.regenerate", input: { input: lastGenerationInput, target } },
+        { requestId },
+      );
+      if (activeRequestId.current !== requestId) {
+        return;
+      }
+      if (result.format === "candidates") {
+        setResult({
+          ...result,
+          candidates: result.candidates.map((item, itemIndex) =>
+            itemIndex === index ? { ...item, text: regenerated.text } : item,
+          ),
+        });
+      } else if (result.format === "raw") {
+        setResult({ ...result, rawText: regenerated.text });
+      }
+    } catch (regenerationError) {
+      if (activeRequestId.current === requestId) {
+        setError(getErrorCopy(regenerationError, copy));
+      }
+    } finally {
+      if (activeRequestId.current === requestId) {
+        activeRequestId.current = undefined;
+        setIsGenerating(false);
+        setRegeneratingIndex(undefined);
+      }
+    }
+  };
+
   const cancel = () => {
     const targetRequestId = activeRequestId.current;
     if (!targetRequestId) {
@@ -202,6 +276,7 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
     }
     activeRequestId.current = undefined;
     setIsGenerating(false);
+    setRegeneratingIndex(undefined);
     void sendInlineRequest({ type: "inline.cancel", targetRequestId }).catch(() => undefined);
   };
 
@@ -254,16 +329,27 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
         <div className="heading">
           <div className="brand-heading">
             <span className="brand-spark" aria-hidden="true">
-              <Sparkle size={22} weight="fill" />
+              <BrandMark size={26} />
             </span>
             <div className="brand-copy">
               <strong>{copy.appName}</strong>
               <span>{copy.inlineTitle}</span>
             </div>
           </div>
-          <button type="button" className="icon" aria-label={copy.inlineClose} onClick={onClose}>
-            <X size={17} weight="bold" aria-hidden="true" />
-          </button>
+          <div className="heading-actions">
+            <button
+              type="button"
+              className="icon"
+              title={copy.inlineOpenSidePanel}
+              aria-label={copy.inlineOpenSidePanel}
+              onClick={openSidePanel}
+            >
+              <SidebarSimple size={18} weight="bold" aria-hidden="true" />
+            </button>
+            <button type="button" className="icon" aria-label={copy.inlineClose} onClick={onClose}>
+              <X size={17} weight="bold" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         {extractionFailed || !context ? (
@@ -273,28 +359,18 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
           </div>
         ) : (
           <div className="workspace">
-            <div className="source">
-              <strong>{copy.inlineSourceLabel}</strong>
-              <p>{context.text}</p>
-            </div>
             {context.quotedPost || context.parentPost ? (
-              <>
-                <div className="source">
-                  <strong>{copy.inlineRelatedContextLabel}</strong>
-                  <p>{(context.quotedPost ?? context.parentPost)?.text}</p>
-                </div>
-                <label className="context">
-                  <input
-                    type="checkbox"
-                    checked={includeContext}
-                    onChange={(event) => setIncludeContext(event.target.checked)}
-                  />
-                  <span>
-                    {copy.inlineIncludeContext}
-                    <small>{copy.inlineContextDisclosure}</small>
-                  </span>
-                </label>
-              </>
+              <label className="context">
+                <input
+                  type="checkbox"
+                  checked={includeContext}
+                  onChange={(event) => setIncludeContext(event.target.checked)}
+                />
+                <span>
+                  {copy.inlineIncludeContext}
+                  <small>{copy.inlineContextDisclosure}</small>
+                </span>
+              </label>
             ) : null}
 
             <fieldset>
@@ -398,10 +474,10 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
                     type="button"
                     className="secondary"
                     disabled={isGenerating}
-                    onClick={generate}
+                    onClick={() => void regenerateItem(index)}
                   >
                     <Sparkle size={14} aria-hidden="true" />
-                    {copy.regenerateItem}
+                    {regeneratingIndex === index ? copy.inlineGenerating : copy.regenerateItem}
                   </button>
                   <button type="button" className="secondary" onClick={() => copyText(item.text)}>
                     <Copy size={14} aria-hidden="true" />
@@ -417,11 +493,6 @@ export function InlinePanel({ context, extractionFailed, onClose }: InlinePanelP
             {copyStatus}
           </div>
         ) : null}
-        <div className="footer-action">
-          <button type="button" className="text-button" onClick={openSidePanel}>
-            {copy.inlineOpenSidePanel}
-          </button>
-        </div>
       </section>
     </>
   );
