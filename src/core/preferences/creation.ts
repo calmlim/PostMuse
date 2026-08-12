@@ -5,11 +5,12 @@ import {
   type QuoteIntent,
   type ReplyIntent,
 } from "../generation/types";
+import { OUTPUT_LANGUAGE_IDS, type OutputLanguageId } from "../generation/languages";
 
-export const CREATION_PREFERENCE_LANGUAGES = ["follow-source", "en", "zh-CN", "zh-TW"] as const;
+export const CREATION_PREFERENCE_LANGUAGES = ["follow-source", ...OUTPUT_LANGUAGE_IDS] as const;
 export const PRESET_OUTPUT_LENGTHS = ["short", "medium", "long"] as const;
 
-export type CreationPreferenceLanguage = (typeof CREATION_PREFERENCE_LANGUAGES)[number];
+export type CreationPreferenceLanguage = "follow-source" | OutputLanguageId;
 export type PresetOutputLength = (typeof PRESET_OUTPUT_LENGTHS)[number];
 
 export interface CreationPreferencesV1 {

@@ -1,6 +1,7 @@
 import { CheckCircle, FloppyDisk, SlidersHorizontal, WarningCircle } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { createDefaultCreationPreferences } from "../core/preferences/creation";
+import { OUTPUT_LANGUAGE_OPTIONS } from "../core/generation/languages";
 import type { Messages } from "../i18n";
 import { loadCreationPreferences, saveCreationPreferences } from "../storage/creation-preferences";
 
@@ -51,9 +52,11 @@ export function CreationPreferencesPanel({
   const languageOptions = (
     <>
       <option value="follow-source">{copy.languageFollowSource}</option>
-      <option value="en">English</option>
-      <option value="zh-CN">简体中文</option>
-      <option value="zh-TW">繁體中文</option>
+      {OUTPUT_LANGUAGE_OPTIONS.map((option) => (
+        <option value={option.id} key={option.id}>
+          {option.label}
+        </option>
+      ))}
     </>
   );
   const lengthOptions = (

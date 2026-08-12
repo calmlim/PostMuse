@@ -16,6 +16,7 @@ import { isGenerationInput, isRegenerationInput } from "../generation/validation
 import type { ImageGenerationInput, ImageGenerationResult } from "../image/types";
 import { isImageGenerationInput } from "../image/validation";
 import type { CreationPreferencesV1 } from "../preferences/creation";
+import type { Locale } from "../../i18n";
 
 export const MESSAGE_TYPES = [
   "settings.get",
@@ -69,7 +70,7 @@ export type ExtensionRequest =
   | { type: "inline.openSidePanel"; requestId: string; input?: GenerationInput };
 
 export interface InlineBootstrap {
-  locale: "en" | "zh-CN";
+  locale: Locale;
   configured: boolean;
   providerDisplayName: string;
   model: string;

@@ -26,6 +26,7 @@ describe("creation preferences", () => {
   it("round trips a valid preference record", async () => {
     const preferences = createDefaultCreationPreferences();
     preferences.inline.candidateCount = 4;
+    preferences.inline.language = "ja";
     preferences.create.threadCount = 8;
     await expect(saveCreationPreferences(preferences)).resolves.toEqual(preferences);
     expect(set).toHaveBeenCalledWith({ [CREATION_PREFERENCES_STORAGE_KEY]: preferences });

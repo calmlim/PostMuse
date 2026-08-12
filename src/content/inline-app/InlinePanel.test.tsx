@@ -142,6 +142,19 @@ describe("InlinePanel", () => {
     );
   });
 
+  it("generates in a selected common output language", async () => {
+    render(<InlinePanel context={context} extractionFailed={false} onClose={vi.fn()} />);
+    const language = await screen.findByRole("combobox", { name: "Output language" });
+    fireEvent.change(language, { target: { value: "ja" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
+    expect(await screen.findByLabelText("Draft 1")).toBeVisible();
+
+    const request = runtimeSendMessage.mock.calls.find(
+      ([message]) => message.type === "inline.generate",
+    )?.[0];
+    expect(request.input.language).toEqual({ mode: "fixed", value: "ja" });
+  });
+
   it("regenerates only the selected inline draft with the original settings", async () => {
     render(<InlinePanel context={context} extractionFailed={false} onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Generate drafts" }));

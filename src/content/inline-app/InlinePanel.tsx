@@ -16,6 +16,7 @@ import type {
   GenerationResult,
   RegenerationInput,
 } from "../../core/generation/types";
+import { OUTPUT_LANGUAGE_OPTIONS, type OutputLanguageId } from "../../core/generation/languages";
 import { getMessages } from "../../i18n";
 import { sendInlineRequest } from "../inline-client";
 import type { XPostContext } from "../x-adapter/types";
@@ -28,7 +29,7 @@ interface InlinePanelProps {
 }
 
 type InlineAction = "rewrite" | "reply" | "quote";
-type InlineLanguage = "follow-source" | "en" | "zh-CN" | "zh-TW";
+type InlineLanguage = "follow-source" | OutputLanguageId;
 
 const panelStyles = `
   :host { all: initial; color-scheme: light dark; }
@@ -401,9 +402,11 @@ export function InlinePanel({
                   onChange={(event) => setLanguage(event.target.value as InlineLanguage)}
                 >
                   <option value="follow-source">{copy.languageFollowSource}</option>
-                  <option value="en">English</option>
-                  <option value="zh-CN">简体中文</option>
-                  <option value="zh-TW">繁體中文</option>
+                  {OUTPUT_LANGUAGE_OPTIONS.map((option) => (
+                    <option value={option.id} key={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>

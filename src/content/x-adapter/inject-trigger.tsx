@@ -1,7 +1,7 @@
 import { Sparkle } from "@phosphor-icons/react";
 import type { MouseEvent as ReactMouseEvent, SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { getMessages } from "../../i18n";
+import { getMessages, resolveLocale } from "../../i18n";
 import { InlinePanel } from "../inline-app/InlinePanel";
 import type { MountedXPost } from "../observer";
 import { extractXPost, findXPostActionBar } from "./extract-post";
@@ -16,8 +16,7 @@ const triggerStyles = `
   @media (prefers-color-scheme: dark) { button { color: rgb(113, 118, 123); } button:hover { color: rgb(138, 175, 255); } }
 `;
 
-const pageLocale = (): "en" | "zh-CN" =>
-  document.documentElement.lang.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+const pageLocale = () => resolveLocale(document.documentElement.lang);
 
 const isPostDetailPage = (): boolean =>
   /^\/(?:i\/web|[^/]+)\/status\/\d+(?:\/|$)/.test(window.location.pathname);

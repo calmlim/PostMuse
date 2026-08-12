@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createGenerationInputFixture } from "../core/generation/fixtures";
 import { createDefaultSettings } from "../core/settings/defaults";
@@ -85,7 +85,7 @@ describe("Side Panel App", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { name: "Create" })).toBeVisible();
-    expect(screen.getByRole("group", { name: "Interface language" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Interface language" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Prompts" })).toBeVisible();
   });
 
@@ -114,13 +114,25 @@ describe("Side Panel App", () => {
     expect(await screen.findByLabelText("Target characters")).toHaveAttribute("max", "25000");
   });
 
+  it("offers common output languages and keeps custom language available", () => {
+    render(<App />);
+    const language = screen.getByLabelText("Output language");
+
+    expect(within(language).getByRole("option", { name: "日本語" })).toBeVisible();
+    expect(within(language).getByRole("option", { name: "Español" })).toBeVisible();
+    expect(within(language).getByRole("option", { name: "العربية" })).toBeVisible();
+    expect(within(language).getByRole("option", { name: "Custom" })).toBeVisible();
+  });
+
   it("switches to Chinese and stores the preference", async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "中文" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Interface language" }), {
+      target: { value: "zh-CN" },
+    });
 
     expect(screen.getByRole("heading", { name: "创作" })).toBeVisible();
-    expect(screen.getByRole("group", { name: "界面语言" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "界面语言" })).toBeVisible();
     await waitFor(() =>
       expect(storageSet).toHaveBeenCalledWith({
         "postmuse.settings": expect.objectContaining({ uiLocale: "zh-CN" }),

@@ -19,6 +19,11 @@ import type {
   SourceKind,
 } from "../core/generation/types";
 import { getCustomLengthBounds } from "../core/generation/types";
+import {
+  isOutputLanguageId,
+  OUTPUT_LANGUAGE_OPTIONS,
+  type OutputLanguageId,
+} from "../core/generation/languages";
 import type { ImageHistoryMetadata } from "../core/image/types";
 import { MAX_FILE_BYTES, MAX_SOURCE_CHARACTERS } from "../core/generation/validation";
 import {
@@ -57,7 +62,7 @@ interface DraftForm {
   text: string;
   contentType: ContentType;
   intent: GenerationIntent;
-  languageValue: "follow-source" | "en" | "zh-CN" | "zh-TW" | "custom";
+  languageValue: "follow-source" | OutputLanguageId | "custom";
   customLanguage: string;
   styleId: string;
   length: OutputLength;
@@ -240,7 +245,7 @@ export function CreatePanel({
     const languageValue: DraftForm["languageValue"] =
       input.language.mode === "follow-source"
         ? "follow-source"
-        : knownLanguage === "en" || knownLanguage === "zh-CN" || knownLanguage === "zh-TW"
+        : isOutputLanguageId(knownLanguage)
           ? knownLanguage
           : "custom";
     setForm({
@@ -745,9 +750,11 @@ export function CreatePanel({
               disabled={isGenerating}
             >
               <option value="follow-source">{copy.languageFollowSource}</option>
-              <option value="en">English</option>
-              <option value="zh-CN">简体中文</option>
-              <option value="zh-TW">繁體中文</option>
+              {OUTPUT_LANGUAGE_OPTIONS.map((option) => (
+                <option value={option.id} key={option.id}>
+                  {option.label}
+                </option>
+              ))}
               <option value="custom">{copy.languageCustom}</option>
             </select>
           </label>

@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, type Locale } from "../../i18n";
+import { detectPreferredLocale, type Locale } from "../../i18n";
 import { IMAGE_PROVIDER_DEFINITIONS, PROVIDER_DEFINITIONS } from "./provider-catalog";
 import type { ImageProviderProfile, ProviderProfile, SettingsV2 } from "./types";
 
@@ -25,7 +25,7 @@ export const createDefaultImageProviderProfile = (): ImageProviderProfile => ({
   keyPersistence: "session",
 });
 
-export const createDefaultSettings = (uiLocale: Locale = DEFAULT_LOCALE): SettingsV2 => ({
+export const createDefaultSettings = (uiLocale: Locale = detectPreferredLocale()): SettingsV2 => ({
   schemaVersion: 2,
   uiLocale,
   activeTextProviderProfileId: DEFAULT_PROFILE_ID,

@@ -112,15 +112,11 @@ textarea {
 }
 
 .locale-switch {
-  display: flex;
+  position: relative;
+  display: block;
   flex: 0 0 auto;
-  gap: 2px;
   min-width: 0;
   margin: 0;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface-strong);
 }
 
 .sr-only {
@@ -134,37 +130,21 @@ textarea {
   border: 0;
 }
 
-.locale-option {
-  min-height: 28px;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
+.locale-select {
+  width: auto;
+  max-width: 152px;
+  min-height: 34px;
+  padding: 5px 28px 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-strong);
+  color: var(--text);
   cursor: pointer;
   font-size: 11px;
   font-weight: 650;
-  white-space: nowrap;
-  transition:
-    background-color 140ms ease,
-    color 140ms ease,
-    transform 100ms ease;
 }
 
-.locale-option:hover {
-  color: var(--text);
-}
-
-.locale-option[data-active="true"] {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.locale-option:active {
-  transform: translateY(1px);
-}
-
-.locale-option:focus-visible {
+.locale-select:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -1852,28 +1832,13 @@ textarea {
 }
 
 .locale-switch {
-  gap: 0;
-  padding: 0;
-  border: 0;
   background: transparent;
 }
 
-.locale-option {
+.locale-select {
   min-height: 36px;
-  padding: 6px 9px;
-  border-radius: 8px;
+  padding-block: 6px;
   font-size: 11.5px;
-}
-
-.locale-option + .locale-option::before {
-  margin-right: 8px;
-  color: var(--border-strong);
-  content: "/";
-}
-
-.locale-option[data-active="true"] {
-  background: transparent;
-  color: var(--accent);
 }
 
 .app-main,
@@ -2257,8 +2222,8 @@ textarea {
     align-items: flex-start;
   }
 
-  .locale-option {
-    padding-inline: 6px;
+  .locale-select {
+    max-width: 132px;
   }
 
   .empty-state {
@@ -2319,10 +2284,6 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .locale-option {
-    transition: none;
-  }
-
   .advanced-toggle svg {
     transition: none;
   }

@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, type Locale } from "../i18n";
+import { detectPreferredLocale, type Locale } from "../i18n";
 import { loadSettings, saveUiLocaleSetting } from "./settings-repository";
 
 export const loadUiLocale = async (): Promise<Locale> => {
@@ -6,7 +6,7 @@ export const loadUiLocale = async (): Promise<Locale> => {
     const settings = await loadSettings();
     return settings.uiLocale;
   } catch {
-    return DEFAULT_LOCALE;
+    return detectPreferredLocale();
   }
 };
 

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { BrandMark } from "../components/BrandMark";
 import { createRequestId } from "../core/contracts/messages";
 import type { GenerationInput } from "../core/generation/types";
-import { DEFAULT_LOCALE, getMessages, type Locale } from "../i18n";
+import { detectPreferredLocale, getMessages, type Locale, UI_LOCALE_OPTIONS } from "../i18n";
 import { loadUiLocale, saveUiLocale } from "../storage/locale-storage";
 import { PENDING_X_CONTEXT_STORAGE_KEY, takePendingXContext } from "../storage/pending-context";
 import { SettingsPanel } from "./SettingsPanel";
@@ -11,10 +11,8 @@ import { CreatePanel } from "./CreatePanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { PromptsPanel } from "./PromptsPanel";
 
-const localeOptions: Locale[] = ["en", "zh-CN"];
-
 export function App() {
-  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const [locale, setLocale] = useState<Locale>(detectPreferredLocale());
   const [view, setView] = useState<"create" | "history" | "prompts" | "settings">("create");
   const [settingsRevision, setSettingsRevision] = useState(0);
   const [promptRevision, setPromptRevision] = useState(0);
@@ -81,7 +79,7 @@ export function App() {
   };
 
   const handleDataReset = () => {
-    setLocale(DEFAULT_LOCALE);
+    setLocale(detectPreferredLocale());
     setSettingsRevision((revision) => revision + 1);
     setPromptRevision((revision) => revision + 1);
     setHistoryRevision((revision) => revision + 1);
@@ -102,21 +100,21 @@ export function App() {
           </div>
         </div>
 
-        <fieldset className="locale-switch">
-          <legend className="sr-only">{copy.localeLabel}</legend>
-          {localeOptions.map((option) => (
-            <button
-              className="locale-option"
-              data-active={locale === option}
-              type="button"
-              aria-pressed={locale === option}
-              key={option}
-              onClick={() => selectLocale(option)}
-            >
-              {option === "en" ? copy.localeEnglish : copy.localeChinese}
-            </button>
-          ))}
-        </fieldset>
+        <label className="locale-switch">
+          <span className="sr-only">{copy.localeLabel}</span>
+          <select
+            className="locale-select"
+            aria-label={copy.localeLabel}
+            value={locale}
+            onChange={(event) => selectLocale(event.target.value as Locale)}
+          >
+            {UI_LOCALE_OPTIONS.map((option) => (
+              <option value={option.id} key={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </header>
 
       <main className="app-main" data-view={view}>
