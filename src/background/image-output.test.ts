@@ -89,4 +89,26 @@ describe("image output conformance", () => {
     );
     expect(close).toHaveBeenCalledOnce();
   });
+
+  it("rejects a local output whose encoded pixels do not match the target", async () => {
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn().mockResolvedValue({ width: 1254, height: 1254, close: vi.fn() }),
+    );
+    vi.stubGlobal(
+      "OffscreenCanvas",
+      class {
+        getContext() {
+          return { drawImage: vi.fn() };
+        }
+        async convertToBlob() {
+          return new Blob([pngHeader(100, 100).buffer as ArrayBuffer], { type: "image/png" });
+        }
+      },
+    );
+
+    await expect(conformImageOutput(result(1254, 1254), input)).rejects.toMatchObject({
+      code: "OUTPUT_INVALID",
+    });
+  });
 });

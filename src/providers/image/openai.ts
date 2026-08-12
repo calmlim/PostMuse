@@ -2,6 +2,7 @@ import { AppError } from "../../core/errors/app-error";
 import {
   appendImageCanvasRequirement,
   getExpectedImageDimensions,
+  getOpenAIRequestDimensions,
 } from "../../core/image/dimensions";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
@@ -12,6 +13,7 @@ export const openAIImageAdapter: ImageProviderAdapter = {
   id: "openai",
   async generate(input, { profile, apiKey, signal }) {
     const dimensions = getExpectedImageDimensions("openai", input.size, input.aspectRatio);
+    const requestDimensions = getOpenAIRequestDimensions(input.aspectRatio);
     const response = await fetchWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/images/generations"),
       {
@@ -24,12 +26,12 @@ export const openAIImageAdapter: ImageProviderAdapter = {
           model: profile.model,
           prompt: appendImageCanvasRequirement(input.prompt, input, dimensions),
           n: 1,
-          size: `${dimensions.width}x${dimensions.height}`,
+          size: `${requestDimensions.width}x${requestDimensions.height}`,
           output_format: "png",
         }),
       },
       signal,
-      { timeoutMs: 180_000, maxRetries: 1 },
+      { timeoutMs: 180_000, maxRetries: 0 },
     );
     const payload = await readJsonResponse(response);
     const firstImage =

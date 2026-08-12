@@ -32,6 +32,7 @@ interface HistoryPanelProps {
 interface HistoryEditor {
   id: string;
   result: GenerationResult;
+  input: GenerationInput;
 }
 
 const getContentTypeLabel = (record: HistoryRecordV1, copy: Messages): string => {
@@ -213,6 +214,7 @@ export function HistoryPanel({
           <GenerationResults
             copy={copy}
             result={editor.result}
+            input={editor.input}
             onChange={(result) => setEditor({ ...editor, result })}
           />
           <div className="history-editor-actions">
@@ -263,7 +265,11 @@ export function HistoryPanel({
                   type="button"
                   className="secondary-button"
                   onClick={() =>
-                    setEditor({ id: record.id, result: structuredClone(record.result) })
+                    setEditor({
+                      id: record.id,
+                      result: structuredClone(record.result),
+                      input: structuredClone(record.input),
+                    })
                   }
                 >
                   <PencilSimple size={15} aria-hidden="true" />

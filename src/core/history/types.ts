@@ -1,4 +1,9 @@
-import { CONTENT_TYPES, type GenerationInput, type GenerationResult } from "../generation/types";
+import {
+  CONTENT_TYPES,
+  GENERATION_WARNINGS,
+  type GenerationInput,
+  type GenerationResult,
+} from "../generation/types";
 import { isGenerationInput } from "../generation/validation";
 import { IMAGE_ASPECT_RATIOS, IMAGE_SIZES, type ImageHistoryMetadata } from "../image/types";
 import { IMAGE_PROVIDER_IDS, PROVIDER_IDS } from "../settings/types";
@@ -28,13 +33,17 @@ const isGeneratedText = (value: unknown): boolean =>
   value.id.length > 0 &&
   typeof value.text === "string";
 
-const isGenerationResult = (value: unknown): value is GenerationResult => {
+export const isGenerationResult = (value: unknown): value is GenerationResult => {
   if (
     !isRecordValue(value) ||
     !PROVIDER_IDS.some((provider) => provider === value.provider) ||
     typeof value.model !== "string" ||
     !Array.isArray(value.warnings) ||
-    !value.warnings.every((warning) => typeof warning === "string") ||
+    !value.warnings.every(
+      (warning) =>
+        typeof warning === "string" &&
+        GENERATION_WARNINGS.some((knownWarning) => knownWarning === warning),
+    ) ||
     !CONTENT_TYPES.some((contentType) => contentType === value.contentType) ||
     (value.softCharacterLimit !== undefined &&
       (typeof value.softCharacterLimit !== "number" ||

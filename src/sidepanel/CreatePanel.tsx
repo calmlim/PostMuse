@@ -19,6 +19,7 @@ import type {
   SourceKind,
 } from "../core/generation/types";
 import { getCustomLengthBounds } from "../core/generation/types";
+import { getRecommendedMaxOutputTokens } from "../core/generation/length";
 import {
   isOutputLanguageId,
   OUTPUT_LANGUAGE_OPTIONS,
@@ -369,6 +370,10 @@ export function CreatePanel({
 
   const profile = snapshot ? getActiveProfile(snapshot) : undefined;
   const isConfigured = Boolean(profile?.model.trim() && snapshot?.activeSecretStatus.hasKey);
+  const recommendedMaxOutputTokens = getRecommendedMaxOutputTokens(buildInput());
+  const hasTokenBudgetWarning = Boolean(
+    profile && profile.maxOutputTokens < recommendedMaxOutputTokens,
+  );
 
   const performFullGeneration = async (generationInput: GenerationInput) => {
     if (!profile) {
@@ -955,6 +960,17 @@ export function CreatePanel({
           </div>
         ) : null}
 
+        {hasTokenBudgetWarning ? (
+          <div className="feedback" data-kind="warning" role="status">
+            <WarningCircle size={18} weight="fill" aria-hidden="true" />
+            <span>
+              {copy.tokenBudgetWarning
+                .replace("{current}", profile?.maxOutputTokens.toLocaleString() ?? "")
+                .replace("{recommended}", recommendedMaxOutputTokens.toLocaleString())}
+            </span>
+          </div>
+        ) : null}
+
         <div className="generate-actions">
           {isGenerating ? (
             <button type="button" className="secondary-button" onClick={cancelGeneration}>
@@ -980,6 +996,7 @@ export function CreatePanel({
         <GenerationResults
           copy={copy}
           result={result}
+          input={lastGenerationInput}
           onChange={setResult}
           onSaveRaw={historyEnabled && result.format === "raw" ? saveRawResult : undefined}
           rawHistorySaved={rawHistorySaved}

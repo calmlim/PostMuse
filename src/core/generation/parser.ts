@@ -1,6 +1,8 @@
 import { isRecordValue } from "../settings/validation";
 import type { GenerationInput, GenerationResult } from "./types";
 import type { ProviderId } from "../settings/types";
+import { getLengthStatus } from "./length";
+import type { GenerationWarning } from "./types";
 
 const createLocalId = (prefix: string, index: number): string => `${prefix}-${index + 1}`;
 
@@ -35,6 +37,14 @@ interface ParseMetadata {
   model: string;
 }
 
+const getLengthWarnings = (texts: string[], input: GenerationInput): GenerationWarning[] => {
+  const statuses = texts.map((text) => getLengthStatus(text, input));
+  return [
+    ...(statuses.includes("below") ? (["LENGTH_BELOW_TARGET"] as const) : []),
+    ...(statuses.includes("above") ? (["LENGTH_ABOVE_TARGET"] as const) : []),
+  ];
+};
+
 export const parseGenerationOutput = (
   rawText: string,
   input: GenerationInput,
@@ -63,8 +73,15 @@ export const parseGenerationOutput = (
       .slice(0, 1);
 
     if (threads.length > 0) {
-      const warnings =
-        threads[0].posts.length === input.threadCount ? [] : ["PARTIAL_THREAD_RESULT"];
+      const warnings: GenerationWarning[] = [
+        ...(threads[0].posts.length === input.threadCount
+          ? []
+          : ["PARTIAL_THREAD_RESULT" as const]),
+        ...getLengthWarnings(
+          threads[0].posts.map((post) => post.text),
+          input,
+        ),
+      ];
       return { format: "thread", threads, warnings, softCharacterLimit, contentType, ...metadata };
     }
   }
@@ -78,8 +95,15 @@ export const parseGenerationOutput = (
       .map((text, index) => ({ id: createLocalId("candidate", index), text: text.trim() }));
 
     if (candidates.length > 0) {
-      const warnings =
-        candidates.length === input.candidateCount ? [] : ["PARTIAL_CANDIDATE_RESULT"];
+      const warnings: GenerationWarning[] = [
+        ...(candidates.length === input.candidateCount
+          ? []
+          : ["PARTIAL_CANDIDATE_RESULT" as const]),
+        ...getLengthWarnings(
+          candidates.map((candidate) => candidate.text),
+          input,
+        ),
+      ];
       return {
         format: "candidates",
         candidates,

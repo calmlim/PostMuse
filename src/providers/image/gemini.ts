@@ -54,6 +54,7 @@ export const geminiImageAdapter: ImageProviderAdapter = {
         body: JSON.stringify({
           model: profile.model,
           input: appendImageCanvasRequirement(input.prompt, input, dimensions),
+          store: false,
           response_format: {
             type: "image",
             mime_type: "image/png",
@@ -63,7 +64,7 @@ export const geminiImageAdapter: ImageProviderAdapter = {
         }),
       },
       signal,
-      { timeoutMs: 180_000, maxRetries: 1 },
+      { timeoutMs: 180_000, maxRetries: 0 },
     );
     const payload = await readJsonResponse(response);
     if (!isRecordValue(payload)) {

@@ -20,7 +20,7 @@ import {
 } from "../storage/secrets-repository";
 import { loadHistoryEnabled } from "../storage/history-preferences";
 import { loadCreationPreferences } from "../storage/creation-preferences";
-import { saveHistoryRecord } from "../storage/history-repository";
+import { saveHistoryRecord, updateHistoryResult } from "../storage/history-repository";
 import { savePendingXContext } from "../storage/pending-context";
 import { loadResolvedPromptLibrary } from "../storage/prompt-repository";
 import { PROMPT_RECIPE_VERSION } from "../core/prompts/prompt-builder";
@@ -104,20 +104,25 @@ const runGeneration = async (
 
     const apiKey = await readApiKey(createTextSecretBinding(profile), profile.keyPersistence);
     const result = await generateText(input, profile, apiKey, controller.signal);
+    let historyId: string | undefined;
     if (saveInlineHistory && result.format !== "raw" && (await loadHistoryEnabled())) {
       try {
         const style = (await loadResolvedPromptLibrary()).active.find(
           (template) => template.id === input.styleId,
         );
-        await saveHistoryRecord(input, result, {
+        const record = await saveHistoryRecord(input, result, {
           recipeVersion: PROMPT_RECIPE_VERSION,
           styleTemplateVersion: style?.version ?? 1,
         });
+        historyId = record.id;
       } catch {
         // A local history failure must not discard a successful Provider result.
       }
     }
-    return { ok: true, data: result };
+    return {
+      ok: true,
+      data: saveInlineHistory ? { result, ...(historyId ? { historyId } : {}) } : result,
+    };
   } finally {
     activeGenerationRequests.delete(requestId);
   }
@@ -199,6 +204,11 @@ const handleRequest = async (
       chrome.sidePanel.open({ tabId: sender.tab.id }),
     ]);
     return { ok: true, data: { opened: true } };
+  }
+
+  if (request.type === "inline.history.sync") {
+    await updateHistoryResult(request.historyId, request.result);
+    return { ok: true, data: { synced: true } };
   }
 
   if (request.type === "settings.saveProfile") {

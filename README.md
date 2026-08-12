@@ -9,7 +9,7 @@ The current implementation contains:
 
 - A Chrome Manifest V3 extension shell.
 - A React and TypeScript Side Panel.
-- English and Simplified Chinese interface loading.
+- Ten interface languages with browser-language first-run detection and English fallback.
 - A persisted interface language preference.
 - Background and X content-script entry boundaries.
 - Versioned local settings with one text Provider configuration and one image Provider configuration.
@@ -20,12 +20,13 @@ The current implementation contains:
 - A live setup check that sends only fixed synthetic text and no draft, history, or custom prompt.
 - A default Create workflow for posts, replies, quotes, threads, and Premium long posts.
 - Independent output-language, built-in style, length, audience, goal, and tone controls.
-- Direct BYOK text generation through OpenAI-compatible Chat Completions, Anthropic Messages,
-  Gemini generateContent, and xAI Chat Completions.
+- Direct BYOK text generation through official/compatible OpenAI Chat Completions, Anthropic
+  Messages, Gemini Interactions, and xAI Chat Completions.
 - Structured-output parsing with deterministic repair and an editable raw-text fallback.
 - Editable candidates and threads with character counts and clipboard copy.
 - Local `.txt` and `.md` input with a 1 MiB file limit.
-- Request cancellation, a 60-second timeout, bounded retries, and stable error mapping.
+- Request cancellation, purpose-specific 30/180-second timeouts, zero automatic network retries,
+  and stable error mapping.
 - A versioned library of 10 built-in writing styles with stable IDs.
 - Local custom styles, built-in overrides, hiding, ordering, individual restore, and restore all.
 - Create automatically reflects prompt changes while preserving the current draft.
@@ -38,14 +39,16 @@ The current implementation contains:
 - The inline panel can hand a one-shot input to the Side Panel; it never fills a composer or
   clicks an X publish control.
 - X DOM observation is batched and idempotent, with cleanup for virtual-list node removal.
-- Content-script messages are limited to inline bootstrap/generation/cancel/open operations;
-  Provider keys stay in trusted extension contexts.
-- Settings schema v2 keeps the image Provider configuration and secret separate from text generation while
-  migrating existing schema v1 settings without losing the active text profile.
+- Content-script messages are limited to validated inline bootstrap/generation/regeneration/history
+  sync/cancel/open operations; Provider keys stay in trusted extension contexts.
+- Settings schema v3 adds Provider-default/custom sampling while preserving separate text/image
+  secrets and migrating schema v1/v2 settings without losing temperature values.
 - Editable image prompts can be created from a candidate, one Thread post, or raw fallback text,
   with visual style, aspect ratio, resolution, and optional in-image text controls.
 - Direct BYOK image generation uses OpenAI Images and Gemini Interactions adapters with one-image
-  responses, cancellation, bounded retries, and the same exact-origin permission boundary.
+  responses, cancellation, zero automatic retries, and the same exact-origin permission boundary.
+- OpenAI requests only official native image sizes, then verifies a local crop/resize to the selected
+  final canvas; OpenAI 2K is explicitly labeled as locally scaled.
 - Generated image bytes stay in the current UI session as a Blob URL for preview and download;
   object URLs are revoked and history stores metadata only.
 - First-use guidance explains the configure → draft → generate/edit/copy workflow before any
@@ -54,8 +57,9 @@ The current implementation contains:
   deletion, and a confirmed full local reset.
 - Packaged privacy/support pages, extension icons, permission/CSP snapshots, and build-time secret
   scans are part of the release candidate.
-- `npm run package:store` creates an audited store ZIP without the X Content Script or localhost
-  origins; the author/development build retains the user-triggered Inline Context feature.
+- `npm run package:store` creates an audited store ZIP with exactly one `https://x.com/*` Content
+  Script and no localhost origins. This user-requested distribution choice carries documented X
+  Terms risk and does not imply X authorization or guaranteed Chrome Web Store approval.
 - Type checking, Biome checks, Vitest, and production builds.
 
 Composer Fill was skipped at its policy gate. Reference images, image editing, account analytics,
@@ -73,8 +77,8 @@ npm run dev
 
 `npm run dev` rebuilds the extension into `dist/` when source files change.
 
-X inline context is enabled by default for the author/development build. `npm run package:store`
-builds and audits the public candidate profile, removes the X Content Script and localhost origins,
+X inline context is enabled in development and store profiles. `npm run package:store` builds and
+audits the public candidate, removes localhost origins, verifies the Content Script gzip budget,
 and writes an ignored ZIP under `release/`.
 
 ## Load in Chrome

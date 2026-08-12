@@ -257,6 +257,9 @@ export function ImageGenerator({
             <option value="1K">1K</option>
             <option value="2K">2K</option>
           </select>
+          {profile?.provider === "openai" && size === "2K" ? (
+            <small>{copy.imageOpenAI2KLocalNotice}</small>
+          ) : null}
         </label>
       </div>
 
@@ -336,6 +339,9 @@ export function ImageGenerator({
               {copy.imageReady} · {result.aspectRatio} · {result.size}
               {result.pixelWidth && result.pixelHeight
                 ? ` · ${result.pixelWidth}×${result.pixelHeight}`
+                : ""}
+              {result.provider === "openai" && result.size === "2K"
+                ? ` · ${copy.imageOpenAI2KLocalBadge}`
                 : ""}
             </span>
             <button type="button" className="secondary-button" onClick={download}>

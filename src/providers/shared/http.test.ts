@@ -15,7 +15,7 @@ describe("provider fetch policy", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("retries 429 responses at most twice and then succeeds", async () => {
+  it("does not retry rate-limit responses", async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(new Response("", { status: 429, headers: { "retry-after": "0" } }))
@@ -26,8 +26,24 @@ describe("provider fetch policy", () => {
       fetchWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
         fetchImpl,
       }),
-    ).resolves.toBeInstanceOf(Response);
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    ).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      "server errors",
+      vi.fn().mockResolvedValue(new Response("", { status: 503 })),
+      "PROVIDER_UNAVAILABLE",
+    ],
+    ["network failures", vi.fn().mockRejectedValue(new TypeError("offline")), "NETWORK_ERROR"],
+  ])("does not retry %s", async (_label, fetchImpl, code) => {
+    await expect(
+      fetchWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({ code });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("uses manual redirects and rejects redirect responses", async () => {

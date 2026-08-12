@@ -1,12 +1,30 @@
 import { AppError } from "../../core/errors/app-error";
 import { isRecordValue } from "../../core/settings/validation";
-import { appendApiPath } from "../shared/endpoints";
+import { appendApiPath, isOfficialOpenAIEndpoint } from "../shared/endpoints";
 import { fetchWithPolicy, readJsonResponse } from "../shared/http";
-import type { TextProviderAdapter } from "./types";
+import { getTextRequestTimeout, type TextProviderAdapter } from "./types";
 
 export const openAICompatibleAdapter: TextProviderAdapter = {
   id: "openai-compatible",
-  async generate(request, { profile, apiKey, signal }) {
+  async generate(request, { profile, apiKey, signal, purpose }) {
+    const officialOpenAI = isOfficialOpenAIEndpoint(profile.baseUrl);
+    const body: Record<string, unknown> = {
+      model: profile.model,
+      messages: [
+        { role: "system", content: request.system },
+        { role: "user", content: request.user },
+      ],
+      [officialOpenAI ? "max_completion_tokens" : "max_tokens"]: profile.maxOutputTokens,
+    };
+    if (profile.samplingMode === "custom") {
+      body.temperature = profile.temperature;
+    }
+    if (officialOpenAI) {
+      body.response_format = {
+        type: "json_schema",
+        json_schema: { name: request.schemaName, strict: true, schema: request.schema },
+      };
+    }
     const response = await fetchWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/chat/completions"),
       {
@@ -15,17 +33,10 @@ export const openAICompatibleAdapter: TextProviderAdapter = {
           authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({
-          model: profile.model,
-          messages: [
-            { role: "system", content: request.system },
-            { role: "user", content: request.user },
-          ],
-          temperature: profile.temperature,
-          max_tokens: profile.maxOutputTokens,
-        }),
+        body: JSON.stringify(body),
       },
       signal,
+      { timeoutMs: getTextRequestTimeout(purpose), maxRetries: 0 },
     );
     const payload = await readJsonResponse(response);
 

@@ -17,9 +17,13 @@ export const appendApiPath = (baseUrl: string, apiPath: string): string => {
 };
 
 export const createGeminiEndpoint = (baseUrl: string, model: string): string => {
-  const normalizedModel = model.trim().replace(/^models\//, "");
-  return appendApiPath(
-    baseUrl,
-    `/v1beta/models/${encodeURIComponent(normalizedModel)}:generateContent`,
-  );
+  void model;
+  return appendApiPath(baseUrl, "/v1beta/interactions");
+};
+
+export const isOfficialOpenAIEndpoint = (baseUrl: string): boolean => {
+  const normalized = normalizeBaseUrl(baseUrl, {
+    allowInsecureLocalhost: supportsInsecureLocalhost(),
+  });
+  return new URL(normalized).origin === "https://api.openai.com";
 };

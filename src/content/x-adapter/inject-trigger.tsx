@@ -1,7 +1,8 @@
 import { Sparkle } from "@phosphor-icons/react";
 import type { MouseEvent as ReactMouseEvent, SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { getMessages, resolveLocale } from "../../i18n";
+import { getInlineMessages } from "../../i18n/inline";
+import { resolveLocale } from "../../i18n/locale";
 import { InlinePanel } from "../inline-app/InlinePanel";
 import type { MountedXPost } from "../observer";
 import { extractXPost, findXPostActionBar } from "./extract-post";
@@ -26,7 +27,7 @@ interface TriggerProps {
 }
 
 function InlineTrigger({ onClick }: TriggerProps) {
-  const copy = getMessages(pageLocale());
+  const copy = getInlineMessages(pageLocale());
   const stopPointerPropagation = (event: SyntheticEvent) => {
     event.stopPropagation();
   };

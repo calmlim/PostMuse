@@ -38,7 +38,7 @@ beforeEach(() => {
 });
 
 describe("image provider adapters", () => {
-  it("maps OpenAI Images generation and its 2K landscape size", async () => {
+  it("uses an official OpenAI native request size for a 2K landscape target", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ data: [{ b64_json: "b3BlbmFpLWltYWdl" }] }), {
         status: 200,
@@ -59,7 +59,7 @@ describe("image provider adapters", () => {
         "Required output canvas: 16:9 aspect ratio, 2048×1152 pixels",
       ),
       n: 1,
-      size: "2048x1152",
+      size: "1536x1024",
       output_format: "png",
     });
   });
@@ -93,6 +93,7 @@ describe("image provider adapters", () => {
     expect(init.headers).toMatchObject({ "x-goog-api-key": "test-image-secret" });
     expect(JSON.parse(String(init.body))).toMatchObject({
       model: "test-image-model",
+      store: false,
       input: expect.stringContaining("Required output canvas: 16:9 aspect ratio, 2752×1536 pixels"),
       response_format: {
         type: "image",

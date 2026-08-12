@@ -123,6 +123,14 @@ describe("prompt builder", () => {
     expect(oldQuote.system).toContain("own concise commentary");
   });
 
+  it("uses a complete language name for fixed catalog languages", () => {
+    const request = buildTextGenerationRequest(
+      createGenerationInputFixture({ language: { mode: "fixed", value: "ja" } }),
+    );
+    expect(request.system).toContain("Write in Japanese.");
+    expect(request.system).not.toContain("Write in ja.");
+  });
+
   it("uses a resolved user style without exposing it to the source layer", () => {
     const request = buildTextGenerationRequest(createGenerationInputFixture(), {
       instruction: "Use the user's saved voice override.",

@@ -11,12 +11,12 @@ beforeEach(() => {
 });
 
 describe("settings repository", () => {
-  it("migrates the legacy locale into schema v2", async () => {
+  it("migrates the legacy locale into schema v3", async () => {
     local.data.uiLocale = "zh-CN";
 
     const settings = await loadSettings();
 
-    expect(settings.schemaVersion).toBe(2);
+    expect(settings.schemaVersion).toBe(3);
     expect(settings.uiLocale).toBe("zh-CN");
     expect(settings.textProviderProfiles).toHaveLength(1);
     expect(settings.imageProviderProfiles).toHaveLength(1);
@@ -36,18 +36,29 @@ describe("settings repository", () => {
     const migrated = await loadSettings();
 
     expect(migrated).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       textProviderProfiles: legacy.textProviderProfiles,
       imageProviderProfiles: [expect.objectContaining({ provider: "openai" })],
     });
     expect(local.data[SETTINGS_STORAGE_KEY]).toEqual(migrated);
   });
 
-  it("loads valid schema v2 without rewriting it", async () => {
+  it("migrates schema v2 to Provider-default sampling while preserving temperature", async () => {
     const current = createDefaultSettings("en");
-    local.data[SETTINGS_STORAGE_KEY] = current;
+    const legacy = {
+      ...current,
+      schemaVersion: 2,
+      textProviderProfiles: current.textProviderProfiles.map(({ samplingMode: _, ...profile }) => ({
+        ...profile,
+        temperature: 1.2,
+      })),
+    };
+    local.data[SETTINGS_STORAGE_KEY] = legacy;
 
-    await expect(loadSettings()).resolves.toEqual(current);
-    expect(local.set).not.toHaveBeenCalled();
+    await expect(loadSettings()).resolves.toMatchObject({
+      schemaVersion: 3,
+      textProviderProfiles: [{ samplingMode: "provider-default", temperature: 1.2 }],
+    });
+    expect(local.set).toHaveBeenCalledTimes(1);
   });
 });

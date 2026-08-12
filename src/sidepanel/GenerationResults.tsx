@@ -7,7 +7,8 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useState } from "react";
-import type { RegenerationInput } from "../core/generation/types";
+import type { GenerationInput, RegenerationInput } from "../core/generation/types";
+import { countUnicodeCharacters, getLengthStatus } from "../core/generation/length";
 import type { ImageHistoryMetadata } from "../core/image/types";
 import type { SettingsSnapshot } from "../core/settings/types";
 import type { GenerationResult } from "../core/generation/types";
@@ -17,6 +18,7 @@ import { ImageGenerator } from "./ImageGenerator";
 interface GenerationResultsProps {
   copy: Messages;
   result: GenerationResult;
+  input?: GenerationInput;
   onChange: (result: GenerationResult) => void;
   onSaveRaw?: () => void;
   rawHistorySaved?: boolean;
@@ -32,11 +34,10 @@ interface GenerationResultsProps {
 
 type ImageSource = { kind: "candidate" | "thread" | "raw"; index: number };
 
-const countCharacters = (value: string): number => Array.from(value).length;
-
 export function GenerationResults({
   copy,
   result,
+  input,
   onChange,
   onSaveRaw,
   rawHistorySaved = false,
@@ -51,6 +52,25 @@ export function GenerationResults({
 }: GenerationResultsProps) {
   const [copyStatus, setCopyStatus] = useState<string>();
   const [imageSource, setImageSource] = useState<ImageSource>();
+  const warningMessages = [
+    ...(result.format === "raw" ? [copy.rawFallbackNotice] : []),
+    ...(result.warnings.some((warning) => warning.startsWith("PARTIAL_"))
+      ? [copy.partialResultNotice]
+      : []),
+    ...(result.warnings.includes("LENGTH_BELOW_TARGET") ? [copy.lengthBelowTarget] : []),
+    ...(result.warnings.includes("LENGTH_ABOVE_TARGET") ? [copy.lengthAboveTarget] : []),
+  ];
+  const getStatusLabel = (text: string): string | undefined => {
+    if (!input) {
+      return undefined;
+    }
+    const labels = {
+      below: copy.lengthBelowTargetShort,
+      within: copy.lengthWithinTargetShort,
+      above: copy.lengthAboveTargetShort,
+    };
+    return labels[getLengthStatus(text, input)];
+  };
 
   const selectedImageText = imageSource
     ? imageSource.kind === "candidate" && result.format === "candidates"
@@ -124,10 +144,10 @@ export function GenerationResults({
         </div>
       </div>
 
-      {result.warnings.length > 0 ? (
+      {warningMessages.length > 0 ? (
         <div className="result-warning">
           <WarningCircle size={17} weight="fill" aria-hidden="true" />
-          <span>{result.format === "raw" ? copy.rawFallbackNotice : copy.partialResultNotice}</span>
+          <span>{warningMessages.join(" ")}</span>
         </div>
       ) : null}
 
@@ -138,7 +158,8 @@ export function GenerationResults({
       {result.format === "candidates" ? (
         <div className="result-list">
           {result.candidates.map((candidate, index) => {
-            const characterCount = countCharacters(candidate.text);
+            const characterCount = countUnicodeCharacters(candidate.text);
+            const statusLabel = getStatusLabel(candidate.text);
             return (
               <article className="result-card" key={candidate.id}>
                 <div className="result-card-heading">
@@ -152,6 +173,7 @@ export function GenerationResults({
                     {result.softCharacterLimit
                       ? `${characterCount} / ${result.softCharacterLimit}`
                       : characterCount}
+                    {statusLabel ? ` · ${statusLabel}` : ""}
                   </span>
                 </div>
                 <textarea
@@ -206,7 +228,8 @@ export function GenerationResults({
       {result.format === "thread" ? (
         <div className="thread-result">
           {result.threads[0]?.posts.map((post, index) => {
-            const characterCount = countCharacters(post.text);
+            const characterCount = countUnicodeCharacters(post.text);
+            const statusLabel = getStatusLabel(post.text);
             return (
               <article className="result-card thread-card" key={post.id}>
                 <div className="result-card-heading">
@@ -215,7 +238,9 @@ export function GenerationResults({
                       .replace("{number}", String(index + 1))
                       .replace("{total}", String(result.threads[0].posts.length))}
                   </strong>
-                  <span data-over={characterCount > 280}>{characterCount} / 280</span>
+                  <span data-over={characterCount > 280}>
+                    {characterCount} / 280{statusLabel ? ` · ${statusLabel}` : ""}
+                  </span>
                 </div>
                 <textarea
                   aria-label={copy.threadPostLabel

@@ -35,6 +35,7 @@ const generate = (adapter: TextProviderAdapter, provider: ProviderId) =>
     profile: profileFor(provider),
     apiKey: "test-secret-value",
     signal: new AbortController().signal,
+    purpose: "generation",
   });
 
 beforeEach(() => {
@@ -43,7 +44,7 @@ beforeEach(() => {
 });
 
 describe("text provider adapters", () => {
-  it("maps OpenAI-compatible Chat Completions", async () => {
+  it("uses official OpenAI token and Structured Output fields without default temperature", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ choices: [{ message: { content: '{"candidates":[]}' } }] }), {
         status: 200,
@@ -56,17 +57,47 @@ describe("text provider adapters", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.openai.com/v1/chat/completions");
     expect(init.headers).toMatchObject({ authorization: "Bearer test-secret-value" });
-    expect(JSON.parse(String(init.body))).toMatchObject({
+    const body = JSON.parse(String(init.body));
+    expect(body).toMatchObject({
       model: "test-model",
-      max_tokens: 1200,
+      max_completion_tokens: 1200,
       messages: [
         { role: "system", content: "Return JSON." },
         { role: "user", content: "Source text." },
       ],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: request.schemaName, strict: true, schema: request.schema },
+      },
     });
+    expect(body).not.toHaveProperty("max_tokens");
+    expect(body).not.toHaveProperty("temperature");
   });
 
-  it("maps Anthropic Messages with a supported temperature", async () => {
+  it("keeps generic OpenAI-compatible fields and sends custom temperature only when selected", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '{"candidates":[]}' } }] }), {
+        status: 200,
+      }),
+    );
+    await openAICompatibleAdapter.generate(request, {
+      profile: {
+        ...profileFor("openai-compatible"),
+        baseUrl: "https://llm.example.com/api",
+        samplingMode: "custom",
+        temperature: 1.1,
+      },
+      apiKey: "test-secret-value",
+      signal: new AbortController().signal,
+      purpose: "generation",
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body).toMatchObject({ max_tokens: 1200, temperature: 1.1 });
+    expect(body).not.toHaveProperty("max_completion_tokens");
+    expect(body).not.toHaveProperty("response_format");
+  });
+
+  it("maps Anthropic Messages without a temperature override", async () => {
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -88,14 +119,15 @@ describe("text provider adapters", () => {
       "anthropic-version": "2023-06-01",
     });
     expect(body.system).toBe("Return JSON.");
-    expect(body.temperature).toBe(0.7);
+    expect(body).not.toHaveProperty("temperature");
   });
 
-  it("maps Gemini generateContent with header authentication and JSON schema", async () => {
+  it("maps Gemini Interactions with transient storage and JSON schema", async () => {
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
-          candidates: [{ content: { parts: [{ text: '{"candidates":[]}' }] } }],
+          status: "completed",
+          steps: [{ type: "model_output", content: [{ type: "text", text: '{"candidates":[]}' }] }],
         }),
         { status: 200 },
       ),
@@ -106,14 +138,21 @@ describe("text provider adapters", () => {
     });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(String(init.body));
-    expect(url).toBe(
-      "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent",
-    );
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/interactions");
     expect(init.headers).toMatchObject({ "x-goog-api-key": "test-secret-value" });
-    expect(body.generationConfig).toMatchObject({
-      responseMimeType: "application/json",
-      responseSchema: request.schema,
+    expect(body).toMatchObject({
+      model: "test-model",
+      input: "Source text.",
+      system_instruction: "Return JSON.",
+      store: false,
+      response_format: {
+        type: "text",
+        mime_type: "application/json",
+        schema: request.schema,
+      },
+      generation_config: { max_output_tokens: 1200 },
     });
+    expect(body.generation_config).not.toHaveProperty("temperature");
   });
 
   it("maps xAI Chat Completions with structured output", async () => {
@@ -134,11 +173,29 @@ describe("text provider adapters", () => {
       type: "json_schema",
       json_schema: { name: request.schemaName, strict: true, schema: request.schema },
     });
+    expect(body).not.toHaveProperty("temperature");
+  });
+
+  it("sends xAI temperature only in custom sampling mode", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '{"candidates":[]}' } }] }), {
+        status: 200,
+      }),
+    );
+    await xAIAdapter.generate(request, {
+      profile: { ...profileFor("xai"), samplingMode: "custom", temperature: 0.4 },
+      apiKey: "test-secret-value",
+      signal: new AbortController().signal,
+      purpose: "generation",
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
+      temperature: 0.4,
+    });
   });
 
   it("maps Provider safety refusals to a stable application error", async () => {
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ promptFeedback: { blockReason: "SAFETY" } }), {
+      new Response(JSON.stringify({ status: "failed", steps: [] }), {
         status: 200,
       }),
     );

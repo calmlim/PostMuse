@@ -1,6 +1,7 @@
 import type { GenerationInput, NormalizedTextRequest } from "../generation/types";
 import { getBuiltInStyle } from "./styles";
 import { createOutputSchema } from "./output-schemas";
+import { getOutputLanguageInstructionName } from "../generation/languages";
 
 export const PROMPT_RECIPE_VERSION = 3;
 
@@ -16,7 +17,7 @@ const contentTypeInstructions: Record<GenerationInput["contentType"], string> = 
 const getLanguageInstruction = (input: GenerationInput): string =>
   input.language.mode === "follow-source"
     ? "Write in the same language as the source material."
-    : `Write in ${input.language.value?.trim()}.`;
+    : `Write in ${getOutputLanguageInstructionName(input.language.value?.trim() ?? "")}.`;
 
 const lengthInstructions: Record<
   GenerationInput["contentType"],

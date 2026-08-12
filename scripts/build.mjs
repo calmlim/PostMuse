@@ -1,4 +1,5 @@
-import { readFile, unlink, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import { gzipSync } from "node:zlib";
 import { build } from "vite";
 
 const watch = process.argv.includes("--watch");
@@ -25,17 +26,19 @@ if (!watch) {
   if (/^\s*(?:import|export)\b/m.test(contentScript)) {
     throw new Error("Content Script build must be a self-contained classic script.");
   }
+  const contentGzipBytes = gzipSync(contentScript).byteLength;
+  if (contentGzipBytes > 120 * 1024) {
+    throw new Error(
+      `Content Script gzip size is ${(contentGzipBytes / 1024).toFixed(1)} KB; the limit is 120 KB.`,
+    );
+  }
 
   if (profile === "store") {
     const manifest = JSON.parse(await readFile("dist/manifest.json", "utf8"));
-    delete manifest.content_scripts;
     manifest.optional_host_permissions = manifest.optional_host_permissions.filter(
       (permission) =>
         !permission.startsWith("http://localhost") && !permission.startsWith("http://127.0.0.1"),
     );
-    await Promise.all([
-      unlink("dist/assets/content.js"),
-      writeFile("dist/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`),
-    ]);
+    await writeFile("dist/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
   }
 }

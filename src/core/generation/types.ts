@@ -18,6 +18,14 @@ export type OutputLength = (typeof OUTPUT_LENGTHS)[number];
 export type ReplyIntent = (typeof REPLY_INTENTS)[number];
 export type QuoteIntent = (typeof QUOTE_INTENTS)[number];
 export type GenerationIntent = ReplyIntent | QuoteIntent;
+export const GENERATION_WARNINGS = [
+  "RAW_TEXT_FALLBACK",
+  "PARTIAL_THREAD_RESULT",
+  "PARTIAL_CANDIDATE_RESULT",
+  "LENGTH_BELOW_TARGET",
+  "LENGTH_ABOVE_TARGET",
+] as const;
+export type GenerationWarning = (typeof GENERATION_WARNINGS)[number];
 
 export interface GenerationInput {
   source: {
@@ -55,7 +63,7 @@ export interface GeneratedText {
 interface GenerationResultBase {
   provider: ProviderId;
   model: string;
-  warnings: string[];
+  warnings: GenerationWarning[];
   softCharacterLimit?: number;
   contentType: ContentType;
 }
@@ -76,7 +84,7 @@ export interface ThreadGenerationResult extends GenerationResultBase {
 export interface RawGenerationResult extends GenerationResultBase {
   format: "raw";
   rawText: string;
-  warnings: ["RAW_TEXT_FALLBACK", ...string[]];
+  warnings: ["RAW_TEXT_FALLBACK", ...GenerationWarning[]];
 }
 
 export type GenerationResult =

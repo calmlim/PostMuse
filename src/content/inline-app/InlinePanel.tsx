@@ -17,7 +17,7 @@ import type {
   RegenerationInput,
 } from "../../core/generation/types";
 import { OUTPUT_LANGUAGE_OPTIONS, type OutputLanguageId } from "../../core/generation/languages";
-import { getMessages } from "../../i18n";
+import { getInlineMessages, type InlineMessages } from "../../i18n/inline";
 import { sendInlineRequest } from "../inline-client";
 import type { XPostContext } from "../x-adapter/types";
 
@@ -90,7 +90,7 @@ const panelStyles = `
   }
 `;
 
-const getErrorCopy = (error: unknown, copy: ReturnType<typeof getMessages>): string =>
+const getErrorCopy = (error: unknown, copy: InlineMessages): string =>
   error instanceof Error && error.name === "HOST_PERMISSION_REQUIRED"
     ? copy.inlinePermissionError
     : copy.inlineRuntimeError;
@@ -112,8 +112,9 @@ export function InlinePanel({
   const [isGenerating, setIsGenerating] = useState(false);
   const [regeneratingIndex, setRegeneratingIndex] = useState<number>();
   const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
+  const [lastHistoryId, setLastHistoryId] = useState<string>();
   const activeRequestId = useRef<string | undefined>(undefined);
-  const copy = getMessages(bootstrap?.locale ?? "en");
+  const copy = getInlineMessages(bootstrap?.locale ?? "en");
   const styleLabels: Record<string, string> = {
     professional: copy.styleProfessional,
     concise: copy.styleConcise,
@@ -205,7 +206,8 @@ export function InlinePanel({
       const input = buildInput();
       const generated = await sendInlineRequest({ type: "inline.generate", input }, { requestId });
       if (activeRequestId.current === requestId) {
-        setResult(generated);
+        setResult(generated.result);
+        setLastHistoryId(generated.historyId);
         setLastGenerationInput(input);
       }
     } catch (generationError) {
@@ -247,15 +249,30 @@ export function InlinePanel({
       if (activeRequestId.current !== requestId) {
         return;
       }
+      let nextResult: GenerationResult;
       if (result.format === "candidates") {
-        setResult({
+        nextResult = {
           ...result,
           candidates: result.candidates.map((item, itemIndex) =>
             itemIndex === index ? { ...item, text: regenerated.text } : item,
           ),
-        });
+        };
       } else if (result.format === "raw") {
-        setResult({ ...result, rawText: regenerated.text });
+        nextResult = { ...result, rawText: regenerated.text };
+      } else {
+        return;
+      }
+      setResult(nextResult);
+      if (lastHistoryId) {
+        try {
+          await sendInlineRequest({
+            type: "inline.history.sync",
+            historyId: lastHistoryId,
+            result: nextResult,
+          });
+        } catch {
+          setCopyStatus(copy.inlineHistorySyncWarning);
+        }
       }
     } catch (regenerationError) {
       if (activeRequestId.current === requestId) {
@@ -296,6 +313,17 @@ export function InlinePanel({
     try {
       await navigator.clipboard.writeText(text);
       setCopyStatus(copy.inlineCopied);
+      if (lastHistoryId && result) {
+        try {
+          await sendInlineRequest({
+            type: "inline.history.sync",
+            historyId: lastHistoryId,
+            result,
+          });
+        } catch {
+          setCopyStatus(`${copy.inlineCopied} ${copy.inlineHistorySyncWarning}`);
+        }
+      }
     } catch {
       setCopyStatus(copy.copyFailed);
     }

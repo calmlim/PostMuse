@@ -2,11 +2,11 @@ import { AppError } from "../../core/errors/app-error";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
 import { fetchWithPolicy, readJsonResponse } from "../shared/http";
-import type { TextProviderAdapter } from "./types";
+import { getTextRequestTimeout, type TextProviderAdapter } from "./types";
 
 export const anthropicAdapter: TextProviderAdapter = {
   id: "anthropic",
-  async generate(request, { profile, apiKey, signal }) {
+  async generate(request, { profile, apiKey, signal, purpose }) {
     const response = await fetchWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/messages"),
       {
@@ -19,12 +19,12 @@ export const anthropicAdapter: TextProviderAdapter = {
         body: JSON.stringify({
           model: profile.model,
           max_tokens: profile.maxOutputTokens,
-          temperature: Math.min(profile.temperature, 1),
           system: request.system,
           messages: [{ role: "user", content: request.user }],
         }),
       },
       signal,
+      { timeoutMs: getTextRequestTimeout(purpose), maxRetries: 0 },
     );
     const payload = await readJsonResponse(response);
 

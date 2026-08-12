@@ -111,6 +111,8 @@ export function SettingsPanel({
   const [isImageBusy, setIsImageBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>();
   const [imageFeedback, setImageFeedback] = useState<Feedback>();
+  const supportsCustomSampling =
+    profile.provider === "openai-compatible" || profile.provider === "xai";
 
   useEffect(() => {
     let active = true;
@@ -458,19 +460,41 @@ export function SettingsPanel({
               </small>
             </label>
 
-            <label className="form-field">
-              <span>{copy.temperatureLabel}</span>
-              <input
-                type="number"
-                min="0"
-                max="1"
-                step="0.1"
-                value={profile.temperature}
-                onChange={(event) => updateProfile("temperature", Number(event.target.value))}
-                disabled={isLoading || isBusy}
-              />
-              <small>{copy.temperatureHint}</small>
-            </label>
+            {supportsCustomSampling ? (
+              <label className="form-field">
+                <span>{copy.samplingModeLabel}</span>
+                <select
+                  value={profile.samplingMode}
+                  onChange={(event) =>
+                    updateProfile(
+                      "samplingMode",
+                      event.target.value as ProviderProfile["samplingMode"],
+                    )
+                  }
+                  disabled={isLoading || isBusy}
+                >
+                  <option value="provider-default">{copy.samplingProviderDefault}</option>
+                  <option value="custom">{copy.samplingCustom}</option>
+                </select>
+                <small>{copy.samplingModeHint}</small>
+              </label>
+            ) : null}
+
+            {supportsCustomSampling && profile.samplingMode === "custom" ? (
+              <label className="form-field">
+                <span>{copy.temperatureLabel}</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value={profile.temperature}
+                  onChange={(event) => updateProfile("temperature", Number(event.target.value))}
+                  disabled={isLoading || isBusy}
+                />
+                <small>{copy.temperatureHint}</small>
+              </label>
+            ) : null}
 
             <label className="form-field">
               <span>{copy.maxTokensLabel}</span>

@@ -30,6 +30,7 @@ export const generateText = async (
     profile,
     apiKey,
     signal,
+    purpose: "generation",
   });
 
   return parseGenerationOutput(response.text, input, {

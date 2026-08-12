@@ -58,8 +58,12 @@ for (const required of [
 }
 
 if (profile === "store") {
-  assert(!manifest.content_scripts, "store profile must not register an X content script");
-  assert(!names.has("assets/content.js"), "store profile must not package the X content script");
+  assert(
+    manifest.content_scripts?.length === 1 &&
+      JSON.stringify(manifest.content_scripts[0]?.matches) === JSON.stringify(["https://x.com/*"]),
+    "store profile must register exactly one X content script",
+  );
+  assert(names.has("assets/content.js"), "store profile must package the X content script");
   assert(
     manifest.optional_host_permissions.every((permission) => !permission.startsWith("http://")),
     "store profile must not request insecure localhost origins",

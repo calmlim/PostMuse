@@ -9,6 +9,7 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "format:check": "biome format .",
+    "i18n:inline": "node scripts/generate-inline-catalog.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "npm run typecheck && node scripts/build.mjs",

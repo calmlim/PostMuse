@@ -2,11 +2,26 @@ import { AppError } from "../../core/errors/app-error";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
 import { fetchWithPolicy, readJsonResponse } from "../shared/http";
-import type { TextProviderAdapter } from "./types";
+import { getTextRequestTimeout, type TextProviderAdapter } from "./types";
 
 export const xAIAdapter: TextProviderAdapter = {
   id: "xai",
-  async generate(request, { profile, apiKey, signal }) {
+  async generate(request, { profile, apiKey, signal, purpose }) {
+    const body: Record<string, unknown> = {
+      model: profile.model,
+      messages: [
+        { role: "system", content: request.system },
+        { role: "user", content: request.user },
+      ],
+      max_tokens: profile.maxOutputTokens,
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: request.schemaName, strict: true, schema: request.schema },
+      },
+    };
+    if (profile.samplingMode === "custom") {
+      body.temperature = profile.temperature;
+    }
     const response = await fetchWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/chat/completions"),
       {
@@ -15,21 +30,10 @@ export const xAIAdapter: TextProviderAdapter = {
           authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({
-          model: profile.model,
-          messages: [
-            { role: "system", content: request.system },
-            { role: "user", content: request.user },
-          ],
-          temperature: profile.temperature,
-          max_tokens: profile.maxOutputTokens,
-          response_format: {
-            type: "json_schema",
-            json_schema: { name: request.schemaName, strict: true, schema: request.schema },
-          },
-        }),
+        body: JSON.stringify(body),
       },
       signal,
+      { timeoutMs: getTextRequestTimeout(purpose), maxRetries: 0 },
     );
     const payload = await readJsonResponse(response);
 

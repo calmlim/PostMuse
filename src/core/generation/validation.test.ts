@@ -79,6 +79,18 @@ describe("generation input validation", () => {
         target: { kind: "thread-post", index: 0, currentTexts: ["Wrong kind"] },
       }),
     ).toBe(false);
+    expect(
+      isRegenerationInput({
+        input: createGenerationInputFixture({ contentType: "long-post", candidateCount: 1 }),
+        target: { kind: "candidate", index: 0, currentTexts: ["x".repeat(25_000)] },
+      }),
+    ).toBe(true);
+    expect(
+      isRegenerationInput({
+        input: createGenerationInputFixture({ contentType: "long-post", candidateCount: 1 }),
+        target: { kind: "candidate", index: 0, currentTexts: ["x".repeat(25_001)] },
+      }),
+    ).toBe(false);
   });
 
   it("requires a fixed language value and one result for long formats", () => {

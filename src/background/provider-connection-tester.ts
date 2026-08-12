@@ -27,11 +27,35 @@ export const runConnectionTest = async (
     throw new AppError("API_KEY_REQUIRED", "Add an API key before testing the connection.");
   }
 
-  await getTextProviderAdapter(profile.provider).generate(CONNECTION_REQUEST, {
-    profile: { ...profile, temperature: 0, maxOutputTokens: Math.min(profile.maxOutputTokens, 64) },
+  const response = await getTextProviderAdapter(profile.provider).generate(CONNECTION_REQUEST, {
+    profile: {
+      ...profile,
+      samplingMode: "provider-default",
+      maxOutputTokens: Math.min(profile.maxOutputTokens, 64),
+    },
     apiKey,
     signal,
+    purpose: "connection-test",
   });
+
+  let result: unknown;
+  try {
+    result = JSON.parse(response.text.trim());
+  } catch {
+    throw new AppError("OUTPUT_INVALID", "The Provider connection probe returned invalid JSON.");
+  }
+  if (
+    typeof result !== "object" ||
+    result === null ||
+    Array.isArray(result) ||
+    Object.keys(result).length !== 1 ||
+    (result as { ok?: unknown }).ok !== true
+  ) {
+    throw new AppError(
+      "OUTPUT_INVALID",
+      "The Provider connection probe returned an invalid result.",
+    );
+  }
 
   return {
     mode: "live",

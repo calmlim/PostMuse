@@ -23,6 +23,12 @@ const OPENAI_DIMENSIONS: Record<ImageSize, Record<ImageAspectRatio, ImagePixelDi
   },
 };
 
+const OPENAI_REQUEST_DIMENSIONS: Record<ImageAspectRatio, ImagePixelDimensions> = {
+  "1:1": { width: 1024, height: 1024 },
+  "16:9": { width: 1536, height: 1024 },
+  "9:16": { width: 1024, height: 1536 },
+};
+
 const GEMINI_DIMENSIONS: Record<ImageSize, Record<ImageAspectRatio, ImagePixelDimensions>> = {
   "1K": {
     "1:1": { width: 1024, height: 1024 },
@@ -42,6 +48,9 @@ export const getExpectedImageDimensions = (
   aspectRatio: ImageAspectRatio,
 ): ImagePixelDimensions =>
   (provider === "gemini" ? GEMINI_DIMENSIONS : OPENAI_DIMENSIONS)[size][aspectRatio];
+
+export const getOpenAIRequestDimensions = (aspectRatio: ImageAspectRatio): ImagePixelDimensions =>
+  OPENAI_REQUEST_DIMENSIONS[aspectRatio];
 
 export const appendImageCanvasRequirement = (
   prompt: string,

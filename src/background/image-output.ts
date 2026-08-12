@@ -69,9 +69,14 @@ export const conformImageOutput = async (
     );
   }
 
-  const bitmap = await createImageBitmap(
-    new Blob([bytes.buffer as ArrayBuffer], { type: result.mimeType }),
-  );
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(
+      new Blob([bytes.buffer as ArrayBuffer], { type: result.mimeType }),
+    );
+  } catch {
+    throw new AppError("OUTPUT_INVALID", "The generated image could not be decoded locally.");
+  }
   try {
     const targetRatio = target.width / target.height;
     const sourceRatio = bitmap.width / bitmap.height;
@@ -95,16 +100,28 @@ export const conformImageOutput = async (
       target.width,
       target.height,
     );
-    const outputType = result.mimeType === "image/webp" ? "image/webp" : result.mimeType;
+    const outputType = "image/png" as const;
     const blob = await canvas.convertToBlob({ type: outputType, quality: 0.94 });
     const outputBytes = new Uint8Array(await blob.arrayBuffer());
+    const finalDimensions = readImageDimensions(outputBytes, outputType);
+    if (finalDimensions?.width !== target.width || finalDimensions.height !== target.height) {
+      throw new AppError(
+        "OUTPUT_INVALID",
+        `Local image processing returned ${finalDimensions?.width ?? "unknown"}×${finalDimensions?.height ?? "unknown"}; expected ${target.width}×${target.height}.`,
+      );
+    }
     return {
       ...result,
       mimeType: outputType,
       base64Data: bytesToBase64(outputBytes),
-      pixelWidth: target.width,
-      pixelHeight: target.height,
+      pixelWidth: finalDimensions.width,
+      pixelHeight: finalDimensions.height,
     };
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError("OUTPUT_INVALID", "The generated image could not be resized locally.");
   } finally {
     bitmap.close();
   }

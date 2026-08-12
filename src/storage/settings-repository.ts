@@ -3,12 +3,13 @@ import {
   createDefaultImageProviderProfile,
   createDefaultSettings,
 } from "../core/settings/defaults";
-import type { ImageProviderProfile, ProviderProfile, SettingsV2 } from "../core/settings/types";
+import type { ImageProviderProfile, ProviderProfile, SettingsV3 } from "../core/settings/types";
 import {
   isImageProviderProfile,
   isLegacySettingsV1,
   isProviderProfile,
   isSettingsV2,
+  isSettingsV3,
 } from "../core/settings/validation";
 
 export const SETTINGS_STORAGE_KEY = "postmuse.settings";
@@ -17,7 +18,7 @@ const LEGACY_UI_LOCALE_KEY = "uiLocale";
 const canUseLocalStorage = () =>
   typeof chrome !== "undefined" && chrome.storage?.local !== undefined;
 
-export const loadSettings = async (): Promise<SettingsV2> => {
+export const loadSettings = async (): Promise<SettingsV3> => {
   if (!canUseLocalStorage()) {
     return createDefaultSettings();
   }
@@ -25,15 +26,32 @@ export const loadSettings = async (): Promise<SettingsV2> => {
   const stored = await chrome.storage.local.get([SETTINGS_STORAGE_KEY, LEGACY_UI_LOCALE_KEY]);
   const current = stored[SETTINGS_STORAGE_KEY];
 
-  if (isSettingsV2(current)) {
+  if (isSettingsV3(current)) {
     return current;
+  }
+
+  if (isSettingsV2(current)) {
+    const migrated: SettingsV3 = {
+      ...current,
+      schemaVersion: 3,
+      textProviderProfiles: current.textProviderProfiles.map((profile) => ({
+        ...profile,
+        samplingMode: "provider-default",
+      })),
+    };
+    await chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: migrated });
+    return migrated;
   }
 
   if (isLegacySettingsV1(current)) {
     const imageProfile = createDefaultImageProviderProfile();
-    const migrated: SettingsV2 = {
+    const migrated: SettingsV3 = {
       ...current,
-      schemaVersion: 2,
+      schemaVersion: 3,
+      textProviderProfiles: current.textProviderProfiles.map((profile) => ({
+        ...profile,
+        samplingMode: "provider-default",
+      })),
       activeImageProviderProfileId: imageProfile.id,
       imageProviderProfiles: [imageProfile],
     };
@@ -49,8 +67,8 @@ export const loadSettings = async (): Promise<SettingsV2> => {
   return migrated;
 };
 
-export const saveSettings = async (settings: SettingsV2): Promise<SettingsV2> => {
-  if (!isSettingsV2(settings)) {
+export const saveSettings = async (settings: SettingsV3): Promise<SettingsV3> => {
+  if (!isSettingsV3(settings)) {
     throw new Error("Settings failed validation.");
   }
 
@@ -61,12 +79,12 @@ export const saveSettings = async (settings: SettingsV2): Promise<SettingsV2> =>
   return settings;
 };
 
-export const saveUiLocaleSetting = async (uiLocale: Locale): Promise<SettingsV2> => {
+export const saveUiLocaleSetting = async (uiLocale: Locale): Promise<SettingsV3> => {
   const settings = await loadSettings();
   return saveSettings({ ...settings, uiLocale });
 };
 
-export const upsertProviderProfile = async (profile: ProviderProfile): Promise<SettingsV2> => {
+export const upsertProviderProfile = async (profile: ProviderProfile): Promise<SettingsV3> => {
   if (!isProviderProfile(profile)) {
     throw new Error("Provider profile failed validation.");
   }
@@ -90,7 +108,7 @@ export const upsertProviderProfile = async (profile: ProviderProfile): Promise<S
 
 export const upsertImageProviderProfile = async (
   profile: ImageProviderProfile,
-): Promise<SettingsV2> => {
+): Promise<SettingsV3> => {
   if (!isImageProviderProfile(profile)) {
     throw new Error("Image provider profile failed validation.");
   }
@@ -112,7 +130,7 @@ export const upsertImageProviderProfile = async (
   });
 };
 
-export const getActiveProviderProfile = (settings: SettingsV2): ProviderProfile => {
+export const getActiveProviderProfile = (settings: SettingsV3): ProviderProfile => {
   const profile = settings.textProviderProfiles.find(
     (item) => item.id === settings.activeTextProviderProfileId,
   );
@@ -124,7 +142,7 @@ export const getActiveProviderProfile = (settings: SettingsV2): ProviderProfile 
   return profile;
 };
 
-export const getActiveImageProviderProfile = (settings: SettingsV2): ImageProviderProfile => {
+export const getActiveImageProviderProfile = (settings: SettingsV3): ImageProviderProfile => {
   const profile = settings.imageProviderProfiles.find(
     (item) => item.id === settings.activeImageProviderProfileId,
   );

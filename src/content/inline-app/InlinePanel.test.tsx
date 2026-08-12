@@ -46,17 +46,20 @@ beforeEach(() => {
       return {
         ok: true,
         data: {
-          format: "candidates",
-          contentType: "post",
-          candidates: [
-            { id: "one", text: "Draft one" },
-            { id: "two", text: "Draft two" },
-            { id: "three", text: "Draft three" },
-          ],
-          warnings: [],
-          provider: "openai-compatible",
-          model: "gpt-test",
-          softCharacterLimit: 280,
+          historyId: "history-inline-1",
+          result: {
+            format: "candidates",
+            contentType: "post",
+            candidates: [
+              { id: "one", text: "Draft one" },
+              { id: "two", text: "Draft two" },
+              { id: "three", text: "Draft three" },
+            ],
+            warnings: [],
+            provider: "openai-compatible",
+            model: "gpt-test",
+            softCharacterLimit: 280,
+          },
         },
       };
     }
@@ -112,6 +115,9 @@ describe("InlinePanel", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Copy" })[0]);
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("Draft one"));
     expect(screen.getByText("Draft copied.")).toBeVisible();
+    expect(runtimeSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "inline.history.sync", historyId: "history-inline-1" }),
+    );
   });
 
   it("keeps a safe side-panel fallback when extraction fails", async () => {

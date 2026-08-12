@@ -109,10 +109,11 @@ export const isRegenerationInput = (value: unknown): value is RegenerationInput 
   if (!isRecordValue(value) || !isGenerationInput(value.input) || !isRecordValue(value.target)) {
     return false;
   }
+  const input = value.input;
   const { kind, index, currentTexts } = value.target;
   const kindMatchesInput =
-    (kind === "candidate" && value.input.contentType !== "thread") ||
-    (kind === "thread-post" && value.input.contentType === "thread");
+    (kind === "candidate" && input.contentType !== "thread") ||
+    (kind === "thread-post" && input.contentType === "thread");
   return (
     kindMatchesInput &&
     typeof index === "number" &&
@@ -122,8 +123,9 @@ export const isRegenerationInput = (value: unknown): value is RegenerationInput 
     currentTexts.length <= 20 &&
     index >= 0 &&
     index < currentTexts.length &&
-    currentTexts.every(
-      (text) => typeof text === "string" && text.trim().length > 0 && text.length <= 20_000,
-    )
+    currentTexts.every((text) => {
+      const maximum = input.contentType === "long-post" ? 25_000 : 20_000;
+      return typeof text === "string" && text.trim().length > 0 && text.length <= maximum;
+    })
   );
 };

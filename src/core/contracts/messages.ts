@@ -16,7 +16,8 @@ import { isGenerationInput, isRegenerationInput } from "../generation/validation
 import type { ImageGenerationInput, ImageGenerationResult } from "../image/types";
 import { isImageGenerationInput } from "../image/validation";
 import type { CreationPreferencesV1 } from "../preferences/creation";
-import type { Locale } from "../../i18n";
+import type { Locale } from "../../i18n/locale";
+import { isGenerationResult } from "../history/types";
 
 export const MESSAGE_TYPES = [
   "settings.get",
@@ -34,6 +35,7 @@ export const MESSAGE_TYPES = [
   "inline.bootstrap",
   "inline.generate",
   "inline.regenerate",
+  "inline.history.sync",
   "inline.cancel",
   "inline.openSidePanel",
 ] as const;
@@ -66,6 +68,7 @@ export type ExtensionRequest =
   | { type: "inline.bootstrap"; requestId: string }
   | { type: "inline.generate"; requestId: string; input: GenerationInput }
   | { type: "inline.regenerate"; requestId: string; input: RegenerationInput }
+  | { type: "inline.history.sync"; requestId: string; historyId: string; result: GenerationResult }
   | { type: "inline.cancel"; requestId: string; targetRequestId: string }
   | { type: "inline.openSidePanel"; requestId: string; input?: GenerationInput };
 
@@ -123,8 +126,9 @@ export interface ExtensionResponseMap {
   "data.revokeOrigins": ProviderPermissionSummary;
   "data.reset": { snapshot: SettingsSnapshot; remainingOriginCount: number };
   "inline.bootstrap": InlineBootstrap;
-  "inline.generate": GenerationResult;
+  "inline.generate": { result: GenerationResult; historyId?: string };
   "inline.regenerate": RegenerationResult;
+  "inline.history.sync": { synced: true };
   "inline.cancel": { cancelled: boolean };
   "inline.openSidePanel": { opened: true };
 }
@@ -174,6 +178,15 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
 
   if (value.type === "text.regenerate" || value.type === "inline.regenerate") {
     return isRegenerationInput(value.input);
+  }
+
+  if (value.type === "inline.history.sync") {
+    return (
+      typeof value.historyId === "string" &&
+      value.historyId.length > 0 &&
+      value.historyId.length <= 100 &&
+      isGenerationResult(value.result)
+    );
   }
 
   if (value.type === "image.generate") {

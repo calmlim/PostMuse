@@ -1,7 +1,7 @@
 import { AppError } from "../../core/errors/app-error";
 
-const DEFAULT_TIMEOUT_MS = 60_000;
-const DEFAULT_RETRIES = 2;
+const DEFAULT_TIMEOUT_MS = 180_000;
+const DEFAULT_RETRIES = 0;
 
 const waitFor = (durationMs: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {

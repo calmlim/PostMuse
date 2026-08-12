@@ -4,6 +4,7 @@ import {
   createDefaultProviderProfile,
 } from "../core/settings/defaults";
 import { createGenerationInputFixture } from "../core/generation/fixtures";
+import type { GenerationResult } from "../core/generation/types";
 import { createStorageAreaMock, type StorageAreaMock } from "../test/chrome-storage";
 import { routeExtensionMessage } from "./message-router";
 import { savePromptTemplate } from "../storage/prompt-repository";
@@ -427,10 +428,42 @@ describe("background message router", () => {
       xContentSender,
     );
 
-    expect(response).toMatchObject({ ok: true, data: { format: "candidates" } });
+    expect(response).toMatchObject({
+      ok: true,
+      data: { historyId: expect.any(String), result: { format: "candidates" } },
+    });
     expect(await listHistoryRecords()).toHaveLength(1);
     expect((await listHistoryRecords())[0].input.source.text).toBe("Current visible X post");
     expect(JSON.stringify(response)).not.toContain("sk-inline-secret");
+    if (!response.ok) {
+      throw new Error("Inline generation unexpectedly failed.");
+    }
+    const envelope = response.data as { historyId: string; result: GenerationResult };
+    if (envelope.result.format !== "candidates") {
+      throw new Error("Expected candidates.");
+    }
+    const editedResult: GenerationResult = {
+      ...envelope.result,
+      candidates: envelope.result.candidates.map((candidate, index) =>
+        index === 0 ? { ...candidate, text: "Edited inline result" } : candidate,
+      ),
+    };
+    await expect(
+      routeExtensionMessage(
+        {
+          type: "inline.history.sync",
+          requestId: "inline-history-sync",
+          historyId: envelope.historyId,
+          result: editedResult,
+        },
+        xContentSender,
+      ),
+    ).resolves.toEqual({ ok: true, data: { synced: true } });
+    const syncedResult = (await listHistoryRecords())[0].result;
+    expect(syncedResult.format).toBe("candidates");
+    if (syncedResult.format === "candidates") {
+      expect(syncedResult.candidates[0].text).toBe("Edited inline result");
+    }
   });
 
   it("generates an image through the separately configured image Provider", async () => {
@@ -601,7 +634,7 @@ describe("background message router", () => {
       data: {
         remainingOriginCount: 0,
         snapshot: {
-          settings: { schemaVersion: 2, activeTextProviderProfileId: "default-text-provider" },
+          settings: { schemaVersion: 3, activeTextProviderProfileId: "default-text-provider" },
           activeSecretStatus: { hasKey: false },
           activeImageSecretStatus: { hasKey: false },
         },

@@ -9,6 +9,11 @@ type InlineRequestInput =
   | { type: "inline.bootstrap" }
   | { type: "inline.generate"; input: GenerationInput }
   | { type: "inline.regenerate"; input: RegenerationInput }
+  | {
+      type: "inline.history.sync";
+      historyId: string;
+      result: import("../core/generation/types").GenerationResult;
+    }
   | { type: "inline.cancel"; targetRequestId: string }
   | { type: "inline.openSidePanel"; input?: GenerationInput };
 

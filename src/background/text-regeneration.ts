@@ -74,6 +74,7 @@ export const regenerateText = async (
     profile,
     apiKey,
     signal,
+    purpose: "generation",
   });
   return {
     text: parseReplacement(response.text),

@@ -15,7 +15,7 @@ describe("generation output parser", () => {
     expect(result).toMatchObject({
       format: "candidates",
       candidates: [{ text: "One" }],
-      warnings: [],
+      warnings: ["LENGTH_BELOW_TARGET"],
     });
   });
 

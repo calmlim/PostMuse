@@ -7,6 +7,7 @@ export type ProviderId = (typeof PROVIDER_IDS)[number];
 export type ImageProviderId = (typeof IMAGE_PROVIDER_IDS)[number];
 export type SecretPersistence = "session" | "local";
 export type SecretScope = "text" | "image";
+export type SamplingMode = "provider-default" | "custom";
 
 export interface SecretBinding {
   profileId: string;
@@ -21,6 +22,7 @@ export interface ProviderProfile {
   provider: ProviderId;
   model: string;
   baseUrl: string;
+  samplingMode: SamplingMode;
   temperature: number;
   maxOutputTokens: number;
   keyPersistence: SecretPersistence;
@@ -35,8 +37,8 @@ export interface ImageProviderProfile {
   keyPersistence: SecretPersistence;
 }
 
-export interface SettingsV2 {
-  schemaVersion: 2;
+export interface SettingsV3 {
+  schemaVersion: 3;
   uiLocale: Locale;
   activeTextProviderProfileId: string;
   textProviderProfiles: ProviderProfile[];
@@ -51,7 +53,7 @@ export interface SecretStatus {
 }
 
 export interface SettingsSnapshot {
-  settings: SettingsV2;
+  settings: SettingsV3;
   activeSecretStatus: SecretStatus;
   activeImageSecretStatus: SecretStatus;
 }

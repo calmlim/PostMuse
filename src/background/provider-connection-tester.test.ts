@@ -9,7 +9,10 @@ const fetchMock = vi.fn();
 const responses: Record<ProviderId, object> = {
   "openai-compatible": { choices: [{ message: { content: '{"ok":true}' } }] },
   anthropic: { stop_reason: "end_turn", content: [{ type: "text", text: '{"ok":true}' }] },
-  gemini: { candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] },
+  gemini: {
+    status: "completed",
+    steps: [{ type: "model_output", content: [{ type: "text", text: '{"ok":true}' }] }],
+  },
   xai: { choices: [{ message: { content: '{"ok":true}' } }] },
 };
 
@@ -32,6 +35,8 @@ describe("live Provider connection tester", () => {
         baseUrl: definition.defaultBaseUrl,
         model: "connection-model",
         maxOutputTokens: 5000,
+        samplingMode: "custom" as const,
+        temperature: 1.4,
       };
 
       await expect(
@@ -42,8 +47,27 @@ describe("live Provider connection tester", () => {
       expect(JSON.stringify(body)).toContain("connection test");
       expect(JSON.stringify(body)).not.toContain("PRIVATE_DRAFT_MARKER");
       expect(
-        body.max_tokens ?? body.maxOutputTokens ?? body.generationConfig?.maxOutputTokens,
+        body.max_completion_tokens ??
+          body.max_tokens ??
+          body.maxOutputTokens ??
+          body.generation_config?.max_output_tokens,
       ).toBe(64);
+      expect(body).not.toHaveProperty("temperature");
     });
   }
+
+  it("rejects a successful HTTP response that does not exactly acknowledge the probe", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"ok":true,"extra":1}' } }] }),
+        {
+          status: 200,
+        },
+      ),
+    );
+    const profile = { ...createDefaultProviderProfile(), model: "connection-model" };
+    await expect(
+      runConnectionTest(profile, "test-secret", new AbortController().signal),
+    ).rejects.toMatchObject({ code: "OUTPUT_INVALID" });
+  });
 });
