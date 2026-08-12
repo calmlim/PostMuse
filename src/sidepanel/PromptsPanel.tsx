@@ -204,23 +204,26 @@ export function PromptsPanel({ copy, onPromptsChanged }: PromptsPanelProps) {
           <h2 id="writing-profile-title">{copy.writingProfileTitle}</h2>
           <p>{copy.writingProfileBody}</p>
         </div>
-        <label className="form-field prompt-instruction-field" htmlFor="writing-profile">
+        <label className="form-field writing-profile-field" htmlFor="writing-profile">
           <span>{copy.writingProfileLabel}</span>
-          <textarea
-            id="writing-profile"
-            aria-label={copy.writingProfileLabel}
-            value={writingProfile}
-            placeholder={copy.writingProfilePlaceholder}
-            maxLength={MAX_WRITING_PROFILE_LENGTH}
-            rows={8}
-            onChange={(event) => {
-              setWritingProfile(event.target.value);
-              setFeedback(undefined);
-            }}
-          />
-          <small>
-            {writingProfile.length.toLocaleString()} / {MAX_WRITING_PROFILE_LENGTH.toLocaleString()}
-          </small>
+          <div className="writing-profile-editor">
+            <textarea
+              id="writing-profile"
+              aria-label={copy.writingProfileLabel}
+              value={writingProfile}
+              placeholder={copy.writingProfilePlaceholder}
+              maxLength={MAX_WRITING_PROFILE_LENGTH}
+              rows={6}
+              onChange={(event) => {
+                setWritingProfile(event.target.value);
+                setFeedback(undefined);
+              }}
+            />
+            <small className="writing-profile-count">
+              {writingProfile.length.toLocaleString()} /{" "}
+              {MAX_WRITING_PROFILE_LENGTH.toLocaleString()}
+            </small>
+          </div>
         </label>
         <div className="writing-profile-footer">
           <small>{copy.writingProfileHint}</small>

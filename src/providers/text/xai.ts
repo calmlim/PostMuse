@@ -23,7 +23,7 @@ export const xAIAdapter: TextProviderAdapter = {
       body.temperature = profile.temperature;
     }
     const payload = await fetchJsonWithPolicy(
-      appendApiPath(profile.baseUrl, "/v1/chat/completions"),
+      appendApiPath(profile.baseUrl, "/chat/completions"),
       {
         method: "POST",
         headers: {

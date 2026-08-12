@@ -8,7 +8,7 @@ export const anthropicAdapter: TextProviderAdapter = {
   id: "anthropic",
   async generate(request, { profile, apiKey, signal, purpose }) {
     const payload = await fetchJsonWithPolicy(
-      appendApiPath(profile.baseUrl, "/v1/messages"),
+      appendApiPath(profile.baseUrl, "/messages"),
       {
         method: "POST",
         headers: {

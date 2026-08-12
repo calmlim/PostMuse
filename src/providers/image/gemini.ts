@@ -44,7 +44,7 @@ export const geminiImageAdapter: ImageProviderAdapter = {
   async generate(input, { profile, apiKey, signal }) {
     const dimensions = getExpectedImageDimensions("gemini", input.size, input.aspectRatio);
     const payload = await fetchJsonWithPolicy(
-      appendApiPath(profile.baseUrl, "/v1beta/interactions"),
+      appendApiPath(profile.baseUrl, "/interactions"),
       {
         method: "POST",
         headers: {

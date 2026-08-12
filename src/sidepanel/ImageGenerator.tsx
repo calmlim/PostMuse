@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRequestId } from "../core/contracts/messages";
-import { buildImagePrompt } from "../core/image/prompt-builder";
+import { buildImagePrompt, buildStandaloneImagePrompt } from "../core/image/prompt-builder";
 import { supportsOpenAIExactDimensions } from "../core/image/dimensions";
 import type { ImageGenerationResult, ImageHistoryMetadata, ImageStyle } from "../core/image/types";
 import type { SettingsSnapshot } from "../core/settings/types";
@@ -22,6 +22,7 @@ interface ImageGeneratorProps {
   onOpenSettings: () => void;
   onClose: () => void;
   onGenerated?: (metadata: ImageHistoryMetadata) => void;
+  mode?: "companion" | "standalone";
 }
 
 const getFriendlyImageError = (error: unknown, copy: Messages): string => {
@@ -64,17 +65,21 @@ export function ImageGenerator({
   onOpenSettings,
   onClose,
   onGenerated,
+  mode = "companion",
 }: ImageGeneratorProps) {
   const [style, setStyle] = useState<ImageStyle>("editorial");
   const [aspectRatio, setAspectRatio] = useState<"1:1" | "16:9" | "9:16">("1:1");
   const [size, setSize] = useState<"1K" | "2K">("1K");
   const [includeText, setIncludeText] = useState(false);
-  const [prompt, setPrompt] = useState(() => buildImagePrompt(sourceText, "editorial", false));
+  const [prompt, setPrompt] = useState(() =>
+    mode === "standalone" ? sourceText : buildImagePrompt(sourceText, "editorial", false),
+  );
   const [result, setResult] = useState<ImageGenerationResult>();
   const [objectUrl, setObjectUrl] = useState<string>();
   const [error, setError] = useState<string>();
   const [isGenerating, setIsGenerating] = useState(false);
   const activeRequestId = useRef<string | undefined>(undefined);
+  const isStandalone = mode === "standalone";
 
   const profile = useMemo(
     () =>
@@ -91,12 +96,12 @@ export function ImageGenerator({
   );
 
   useEffect(() => {
-    setPrompt(buildImagePrompt(sourceText, "editorial", false));
+    setPrompt(isStandalone ? sourceText : buildImagePrompt(sourceText, "editorial", false));
     setStyle("editorial");
     setIncludeText(false);
     setResult(undefined);
     setError(undefined);
-  }, [sourceText]);
+  }, [isStandalone, sourceText]);
 
   useEffect(() => {
     if (!result || typeof URL.createObjectURL !== "function") {
@@ -116,7 +121,9 @@ export function ImageGenerator({
   const updatePromptDirection = (nextStyle: ImageStyle, nextIncludeText: boolean) => {
     setStyle(nextStyle);
     setIncludeText(nextIncludeText);
-    setPrompt(buildImagePrompt(sourceText, nextStyle, nextIncludeText));
+    if (!isStandalone) {
+      setPrompt(buildImagePrompt(sourceText, nextStyle, nextIncludeText));
+    }
     setResult(undefined);
     setError(undefined);
   };
@@ -150,10 +157,20 @@ export function ImageGenerator({
       if (activeRequestId.current !== requestId) {
         return;
       }
+      const trimmedPrompt = prompt.trim();
       const generated = await sendExtensionRequest(
         {
           type: "image.generate",
-          input: { sourceText, prompt: prompt.trim(), style, aspectRatio, size, includeText },
+          input: {
+            sourceText: isStandalone ? trimmedPrompt : sourceText,
+            prompt: isStandalone
+              ? buildStandaloneImagePrompt(trimmedPrompt, style, includeText)
+              : trimmedPrompt,
+            style,
+            aspectRatio,
+            size,
+            includeText,
+          },
         },
         { requestId },
       );
@@ -211,8 +228,10 @@ export function ImageGenerator({
           <ImageSquare size={19} weight="duotone" />
         </span>
         <div>
-          <h3 id="image-generator-title">{copy.imageGeneratorTitle}</h3>
-          <p>{copy.imageGeneratorBody}</p>
+          <h3 id="image-generator-title">
+            {isStandalone ? copy.standaloneImageTitle : copy.imageGeneratorTitle}
+          </h3>
+          <p>{isStandalone ? copy.standaloneImageBody : copy.imageGeneratorBody}</p>
         </div>
         <button
           type="button"
@@ -286,9 +305,9 @@ export function ImageGenerator({
       </label>
 
       <label className="form-field image-prompt-field">
-        <span>{copy.imagePromptLabel}</span>
+        <span>{isStandalone ? copy.imageDescriptionLabel : copy.imagePromptLabel}</span>
         <textarea
-          aria-label={copy.imagePromptLabel}
+          aria-label={isStandalone ? copy.imageDescriptionLabel : copy.imagePromptLabel}
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
@@ -299,7 +318,7 @@ export function ImageGenerator({
           maxLength={20_000}
           disabled={isGenerating}
         />
-        <small>{copy.imagePromptHint}</small>
+        <small>{isStandalone ? copy.imageDescriptionHint : copy.imagePromptHint}</small>
       </label>
 
       {!isConfigured ? (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildImagePrompt } from "./prompt-builder";
+import { buildImagePrompt, buildStandaloneImagePrompt } from "./prompt-builder";
 import { isImageGenerationInput } from "./validation";
 
 describe("image prompt builder", () => {
@@ -36,5 +36,17 @@ describe("image prompt builder", () => {
         includeText: false,
       }),
     ).toBe(false);
+  });
+
+  it("builds a standalone prompt without requiring a social post draft", () => {
+    const prompt = buildStandaloneImagePrompt(
+      "A red paper boat crossing a quiet blue lake",
+      "minimal",
+      false,
+    );
+
+    expect(prompt).toContain("<IMAGE_DESCRIPTION>");
+    expect(prompt).toContain("A red paper boat crossing a quiet blue lake");
+    expect(prompt).not.toContain("<SOURCE_POST>");
   });
 });

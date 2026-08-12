@@ -58,7 +58,6 @@ describe("GenerationResults", () => {
   });
 
   it("renders unsafe Provider strings only as editable text", () => {
-    const onRegenerateItem = vi.fn();
     render(
       <GenerationResults
         copy={getMessages("en")}
@@ -71,7 +70,6 @@ describe("GenerationResults", () => {
           model: "gemini-test",
         }}
         onChange={vi.fn()}
-        onRegenerateItem={onRegenerateItem}
       />,
     );
 
@@ -82,16 +80,10 @@ describe("GenerationResults", () => {
     expect(document.querySelector("script")).toBeNull();
     expect(screen.queryByRole("button", { name: "Generate image" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
-    expect(onRegenerateItem).toHaveBeenCalledWith({
-      kind: "candidate",
-      index: 0,
-      currentTexts: ['<script>globalThis.compromised = true</script><img src=x onerror="bad()">'],
-    });
+    expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
   });
 
-  it("offers targeted and full regeneration without changing the current result itself", () => {
-    const onRegenerateItem = vi.fn();
+  it("offers full regeneration without per-candidate regeneration", () => {
     const onRegenerateAll = vi.fn();
     const result = {
       format: "candidates" as const,
@@ -111,17 +103,11 @@ describe("GenerationResults", () => {
         copy={getMessages("en")}
         result={result}
         onChange={vi.fn()}
-        onRegenerateItem={onRegenerateItem}
         onRegenerateAll={onRegenerateAll}
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Regenerate" })[1]);
-    expect(onRegenerateItem).toHaveBeenCalledWith({
-      kind: "candidate",
-      index: 1,
-      currentTexts: ["Keep one", "Replace two"],
-    });
+    expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Regenerate all" }));
     expect(onRegenerateAll).toHaveBeenCalledOnce();
     expect(screen.getByLabelText("Candidate 1")).toHaveValue("Keep one");

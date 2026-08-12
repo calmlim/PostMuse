@@ -79,4 +79,52 @@ describe("ImageGenerator", () => {
     unmount();
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:postmuse-image"));
   });
+
+  it("generates a standalone image from a description without a text draft", async () => {
+    sendMessage.mockResolvedValue({
+      ok: true,
+      data: {
+        provider: "openai",
+        model: "gpt-image-2",
+        prompt: "Standalone image prompt",
+        aspectRatio: "1:1",
+        size: "1K",
+        mimeType: "image/png",
+        base64Data: "aW1hZ2U=",
+      },
+    });
+    const settings = createDefaultSettings();
+    render(
+      <ImageGenerator
+        copy={getMessages("en")}
+        sourceText=""
+        snapshot={{
+          settings,
+          activeSecretStatus: { hasKey: false },
+          activeImageSecretStatus: { hasKey: true, persistence: "session" },
+        }}
+        onOpenSettings={vi.fn()}
+        onClose={vi.fn()}
+        mode="standalone"
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Create an image" })).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Image description"), {
+      target: { value: "A red paper boat crossing a quiet blue lake" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate image" }));
+
+    await waitFor(() =>
+      expect(sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "image.generate",
+          input: expect.objectContaining({
+            sourceText: "A red paper boat crossing a quiet blue lake",
+            prompt: expect.stringContaining("<IMAGE_DESCRIPTION>"),
+          }),
+        }),
+      ),
+    );
+  });
 });

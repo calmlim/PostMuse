@@ -29,7 +29,7 @@ export const openAICompatibleAdapter: TextProviderAdapter = {
       };
     }
     const payload = await fetchJsonWithPolicy(
-      appendApiPath(profile.baseUrl, "/v1/chat/completions"),
+      appendApiPath(profile.baseUrl, "/chat/completions"),
       {
         method: "POST",
         headers: {

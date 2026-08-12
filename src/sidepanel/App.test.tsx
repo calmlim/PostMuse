@@ -89,6 +89,17 @@ describe("Side Panel App", () => {
     expect(screen.getByRole("button", { name: "Prompts" })).toBeVisible();
   });
 
+  it("opens standalone image creation without a text draft", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create image" }));
+
+    expect(await screen.findByRole("heading", { name: "Create an image" })).toBeVisible();
+    expect(screen.getByLabelText("Image description")).toHaveValue("");
+    expect(screen.queryByLabelText("Your idea or draft")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate image" })).toBeDisabled();
+  });
+
   it("shows content-specific character and paragraph ranges", () => {
     render(<App />);
 
@@ -188,6 +199,7 @@ describe("Side Panel App", () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Text generation/ }));
 
     const model = await screen.findByLabelText("Model");
     fireEvent.change(model, { target: { value: "gpt-5-mini" } });
@@ -198,6 +210,28 @@ describe("Side Panel App", () => {
     expect(await screen.findByText(/Live connection passed/)).toBeVisible();
     expect(order).toEqual(["permission", "settings.saveProfile", "provider.test", "settings.get"]);
     expect(permissionsRequest).toHaveBeenCalledWith({ origins: ["https://api.openai.com/*"] });
+  });
+
+  it("keeps primary settings sections collapsed until their heading is activated", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+
+    const creation = await screen.findByRole("button", { name: /Creation defaults/ });
+    const text = screen.getByRole("button", { name: /Text generation/ });
+    const image = screen.getByRole("button", { name: /Image generation/ });
+
+    expect(creation).toHaveAttribute("aria-expanded", "false");
+    expect(text).toHaveAttribute("aria-expanded", "false");
+    expect(image).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Model")).not.toBeInTheDocument();
+
+    fireEvent.click(text);
+    expect(text).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByLabelText("Model")).toBeVisible();
+
+    fireEvent.click(text);
+    expect(text).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Model")).not.toBeInTheDocument();
   });
 
   it("generates editable candidates and copies the chosen draft", async () => {

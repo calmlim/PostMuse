@@ -19,7 +19,7 @@ export const openAIImageAdapter: ImageProviderAdapter = {
       input.aspectRatio,
     );
     const payload = await fetchJsonWithPolicy(
-      appendApiPath(profile.baseUrl, "/v1/images/generations"),
+      appendApiPath(profile.baseUrl, "/images/generations"),
       {
         method: "POST",
         headers: {

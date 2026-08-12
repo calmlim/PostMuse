@@ -10,12 +10,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BrandMark } from "../../components/BrandMark";
 import { createRequestId, type InlineBootstrap } from "../../core/contracts/messages";
-import type {
-  ContentType,
-  GenerationInput,
-  GenerationResult,
-  RegenerationInput,
-} from "../../core/generation/types";
+import type { ContentType, GenerationInput, GenerationResult } from "../../core/generation/types";
 import { refreshLengthWarnings } from "../../core/generation/result-warnings";
 import { OUTPUT_LANGUAGE_OPTIONS, type OutputLanguageId } from "../../core/generation/languages";
 import { getInlineMessages, type InlineMessages } from "../../i18n/inline";
@@ -37,7 +32,7 @@ const panelStyles = `
   * { box-sizing: border-box; }
   button, select, textarea, input { font: inherit; }
   .panel { margin: 12px 0 6px; overflow: hidden; border: 1px solid #deddd6; border-radius: 14px; background: #fdfcf9; color: #171816; box-shadow: 0 12px 32px rgba(35,34,29,.09); font: 13px/1.45 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-  .heading, .heading-actions, .actions, .result-heading, .brand-heading, .result-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .heading, .heading-actions, .actions, .result-heading, .brand-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .heading { padding: 14px 16px; border-bottom: 1px solid #e5e3dc; }
   .brand-heading { justify-content: flex-start; min-width: 0; }
   .brand-spark { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; color: #ee763b; }
@@ -71,13 +66,17 @@ const panelStyles = `
   .error { background: #fff0ee; color: #a23327; }
   .notice div { display: grid; gap: 2px; }
   .notice small { color: #77766e; }
-  .results { display: grid; gap: 0; margin-top: 14px; padding: 0 16px; border-top: 1px solid #e5e3dc; }
-  .result { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px solid #e5e3dc; }
-  .result strong { font-size: 11px; }
-  .result textarea { width: 100%; min-height: 90px; resize: vertical; padding: 11px 12px; border: 1px solid #cbc9c0; border-radius: 9px; background: #fffdfa; color: #171816; font-size: 12px; line-height: 1.5; }
-  .result-actions { justify-content: flex-end; }
-  .result .secondary { min-height: 36px; padding: 6px 8px; }
-  .status { padding: 0 16px 8px; color: #315fd0; font-size: 9.5px; text-align: right; }
+  .results { display: grid; gap: 0; margin-top: 14px; padding: 8px 16px 6px; border-top: 1px solid #e5e3dc; }
+  .result { display: grid; gap: 8px; padding: 13px 0 15px; border-bottom: 1px solid #e5e3dc; }
+  .result:last-child { border-bottom: 0; }
+  .result-heading { min-height: 28px; padding-inline: 2px; }
+  .result strong { font-size: 11px; letter-spacing: -.01em; }
+  .result textarea { width: 100%; min-height: 78px; field-sizing: content; resize: vertical; padding: 11px 12px; border: 1px solid #deddd6; border-radius: 9px; outline: 0; background: #fffdfa; color: #171816; font-size: 12px; line-height: 1.55; box-shadow: inset 0 1px 2px rgba(35,34,29,.025); }
+  .result textarea:hover { border-color: #cbc9c0; }
+  .result textarea:focus-visible { border-color: #315fca; outline: 2px solid rgba(49,95,202,.16); outline-offset: 1px; }
+  .result-copy { min-height: 28px; padding: 3px 5px; border-radius: 7px; }
+  .result-copy:hover { background: #edf2ff; }
+  .status { padding: 0 16px 10px; color: #315fd0; font-size: 9.5px; text-align: right; }
   button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid #315fca; outline-offset: 2px; }
   @media (prefers-color-scheme: dark) {
     .panel { border-color: #3b3b37; background: #191a18; color: #f2f0e9; }
@@ -87,6 +86,7 @@ const panelStyles = `
     .context { background: #22231f; color: #dce3ed; }
     .choice[data-active="true"], .notice { background: #202d48; color: #8aafff; }
     .secondary { color: #8aafff; }
+    .result-copy:hover { background: #202d48; }
     .error { background: #3c2424; color: #ffb5aa; }
   }
 `;
@@ -111,7 +111,6 @@ export function InlinePanel({
   const [error, setError] = useState<string>();
   const [copyStatus, setCopyStatus] = useState<string>();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [regeneratingIndex, setRegeneratingIndex] = useState<number>();
   const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
   const [lastHistoryId, setLastHistoryId] = useState<string>();
   const activeRequestId = useRef<string | undefined>(undefined);
@@ -223,72 +222,6 @@ export function InlinePanel({
     }
   };
 
-  const regenerateItem = async (index: number) => {
-    if (!result || !lastGenerationInput) {
-      return;
-    }
-    const currentTexts =
-      result.format === "candidates"
-        ? result.candidates.map((item) => item.text)
-        : result.format === "raw"
-          ? [result.rawText]
-          : [];
-    if (currentTexts.length === 0) {
-      return;
-    }
-    const target: RegenerationInput["target"] = { kind: "candidate", index, currentTexts };
-    const requestId = createRequestId();
-    activeRequestId.current = requestId;
-    setIsGenerating(true);
-    setRegeneratingIndex(index);
-    setError(undefined);
-    try {
-      const regenerated = await sendInlineRequest(
-        { type: "inline.regenerate", input: { input: lastGenerationInput, target } },
-        { requestId },
-      );
-      if (activeRequestId.current !== requestId) {
-        return;
-      }
-      let nextResult: GenerationResult;
-      if (result.format === "candidates") {
-        nextResult = {
-          ...result,
-          candidates: result.candidates.map((item, itemIndex) =>
-            itemIndex === index ? { ...item, text: regenerated.text } : item,
-          ),
-        };
-      } else if (result.format === "raw") {
-        nextResult = { ...result, rawText: regenerated.text };
-      } else {
-        return;
-      }
-      nextResult = refreshLengthWarnings(nextResult, lastGenerationInput);
-      setResult(nextResult);
-      if (lastHistoryId) {
-        try {
-          await sendInlineRequest({
-            type: "inline.history.sync",
-            historyId: lastHistoryId,
-            result: nextResult,
-          });
-        } catch {
-          setCopyStatus(copy.inlineHistorySyncWarning);
-        }
-      }
-    } catch (regenerationError) {
-      if (activeRequestId.current === requestId) {
-        setError(getErrorCopy(regenerationError, copy));
-      }
-    } finally {
-      if (activeRequestId.current === requestId) {
-        activeRequestId.current = undefined;
-        setIsGenerating(false);
-        setRegeneratingIndex(undefined);
-      }
-    }
-  };
-
   const cancel = () => {
     const targetRequestId = activeRequestId.current;
     if (!targetRequestId) {
@@ -296,7 +229,6 @@ export function InlinePanel({
     }
     activeRequestId.current = undefined;
     setIsGenerating(false);
-    setRegeneratingIndex(undefined);
     void sendInlineRequest({ type: "inline.cancel", targetRequestId }).catch(() => undefined);
   };
 
@@ -501,6 +433,14 @@ export function InlinePanel({
               <article className="result" key={item.id}>
                 <div className="result-heading">
                   <strong>{copy.inlineResultLabel.replace("{number}", String(index + 1))}</strong>
+                  <button
+                    type="button"
+                    className="secondary result-copy"
+                    onClick={() => copyText(item.text)}
+                  >
+                    <Copy size={14} aria-hidden="true" />
+                    {copy.copyText}
+                  </button>
                 </div>
                 <textarea
                   aria-label={copy.inlineResultLabel.replace("{number}", String(index + 1))}
@@ -508,21 +448,6 @@ export function InlinePanel({
                   onChange={(event) => updateResultText(index, event.target.value)}
                   readOnly={result?.format === "thread"}
                 />
-                <div className="result-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={isGenerating}
-                    onClick={() => void regenerateItem(index)}
-                  >
-                    <Sparkle size={14} aria-hidden="true" />
-                    {regeneratingIndex === index ? copy.inlineGenerating : copy.regenerateItem}
-                  </button>
-                  <button type="button" className="secondary" onClick={() => copyText(item.text)}>
-                    <Copy size={14} aria-hidden="true" />
-                    {copy.copyText}
-                  </button>
-                </div>
               </article>
             ))}
           </div>

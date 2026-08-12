@@ -3,6 +3,10 @@ import {
   createDefaultImageProviderProfile,
   createDefaultSettings,
 } from "../core/settings/defaults";
+import {
+  IMAGE_PROVIDER_DEFINITIONS,
+  PROVIDER_DEFINITIONS,
+} from "../core/settings/provider-catalog";
 import type { ImageProviderProfile, ProviderProfile, SettingsV3 } from "../core/settings/types";
 import {
   isImageProviderProfile,
@@ -18,6 +22,37 @@ const LEGACY_UI_LOCALE_KEY = "uiLocale";
 const canUseLocalStorage = () =>
   typeof chrome !== "undefined" && chrome.storage?.local !== undefined;
 
+const LEGACY_DEFAULT_BASE_URLS = {
+  text: {
+    "openai-compatible": "https://api.openai.com",
+    anthropic: "https://api.anthropic.com",
+    gemini: "https://generativelanguage.googleapis.com",
+    xai: "https://api.x.ai",
+  },
+  image: {
+    openai: "https://api.openai.com",
+    gemini: "https://generativelanguage.googleapis.com",
+  },
+} as const;
+
+const migrateDefaultBaseUrls = (settings: SettingsV3): SettingsV3 => ({
+  ...settings,
+  textProviderProfiles: settings.textProviderProfiles.map((profile) => ({
+    ...profile,
+    baseUrl:
+      profile.baseUrl === LEGACY_DEFAULT_BASE_URLS.text[profile.provider]
+        ? PROVIDER_DEFINITIONS[profile.provider].defaultBaseUrl
+        : profile.baseUrl,
+  })),
+  imageProviderProfiles: settings.imageProviderProfiles.map((profile) => ({
+    ...profile,
+    baseUrl:
+      profile.baseUrl === LEGACY_DEFAULT_BASE_URLS.image[profile.provider]
+        ? IMAGE_PROVIDER_DEFINITIONS[profile.provider].defaultBaseUrl
+        : profile.baseUrl,
+  })),
+});
+
 export const loadSettings = async (): Promise<SettingsV3> => {
   if (!canUseLocalStorage()) {
     return createDefaultSettings();
@@ -27,25 +62,29 @@ export const loadSettings = async (): Promise<SettingsV3> => {
   const current = stored[SETTINGS_STORAGE_KEY];
 
   if (isSettingsV3(current)) {
-    return current;
+    const migrated = migrateDefaultBaseUrls(current);
+    if (JSON.stringify(migrated) !== JSON.stringify(current)) {
+      await chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: migrated });
+    }
+    return migrated;
   }
 
   if (isSettingsV2(current)) {
-    const migrated: SettingsV3 = {
+    const migrated = migrateDefaultBaseUrls({
       ...current,
       schemaVersion: 3,
       textProviderProfiles: current.textProviderProfiles.map((profile) => ({
         ...profile,
         samplingMode: "provider-default",
       })),
-    };
+    });
     await chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: migrated });
     return migrated;
   }
 
   if (isLegacySettingsV1(current)) {
     const imageProfile = createDefaultImageProviderProfile();
-    const migrated: SettingsV3 = {
+    const migrated = migrateDefaultBaseUrls({
       ...current,
       schemaVersion: 3,
       textProviderProfiles: current.textProviderProfiles.map((profile) => ({
@@ -54,7 +93,7 @@ export const loadSettings = async (): Promise<SettingsV3> => {
       })),
       activeImageProviderProfileId: imageProfile.id,
       imageProviderProfiles: [imageProfile],
-    };
+    });
     await chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: migrated });
     return migrated;
   }

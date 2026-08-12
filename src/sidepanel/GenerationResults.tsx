@@ -7,7 +7,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useState } from "react";
-import type { GenerationInput, RegenerationInput } from "../core/generation/types";
+import type { GenerationInput } from "../core/generation/types";
 import { countUnicodeCharacters, getLengthStatus } from "../core/generation/length";
 import { refreshLengthWarnings } from "../core/generation/result-warnings";
 import type { ImageHistoryMetadata } from "../core/image/types";
@@ -27,9 +27,7 @@ interface GenerationResultsProps {
   onOpenSettings?: () => void;
   onImageGenerated?: (metadata: ImageHistoryMetadata) => void;
   onCopied?: (result: GenerationResult) => Promise<void> | void;
-  onRegenerateItem?: (target: RegenerationInput["target"]) => void;
   onRegenerateAll?: () => void;
-  regeneratingTarget?: string;
   isRegenerating?: boolean;
 }
 
@@ -46,9 +44,7 @@ export function GenerationResults({
   onOpenSettings = () => undefined,
   onImageGenerated,
   onCopied,
-  onRegenerateItem,
   onRegenerateAll,
-  regeneratingTarget,
   isRegenerating = false,
 }: GenerationResultsProps) {
   const [copyStatus, setCopyStatus] = useState<string>();
@@ -139,7 +135,7 @@ export function GenerationResults({
               disabled={isRegenerating}
             >
               <ArrowsClockwise size={16} weight="bold" aria-hidden="true" />
-              {isRegenerating && !regeneratingTarget ? copy.regeneratingItem : copy.regenerateAll}
+              {isRegenerating ? copy.regeneratingItem : copy.regenerateAll}
             </button>
           ) : null}
           <span className="provider-chip">
@@ -187,25 +183,6 @@ export function GenerationResults({
                   rows={result.candidates.length === 1 ? 10 : 5}
                 />
                 <div className="result-card-actions">
-                  {onRegenerateItem ? (
-                    <button
-                      type="button"
-                      className="copy-button"
-                      onClick={() =>
-                        onRegenerateItem({
-                          kind: "candidate",
-                          index,
-                          currentTexts: result.candidates.map((item) => item.text),
-                        })
-                      }
-                      disabled={isRegenerating}
-                    >
-                      <ArrowsClockwise size={16} weight="bold" aria-hidden="true" />
-                      {regeneratingTarget === `candidate:${index}`
-                        ? copy.regeneratingItem
-                        : copy.regenerateItem}
-                    </button>
-                  ) : null}
                   {canGenerateImage ? (
                     <button
                       type="button"
@@ -257,25 +234,6 @@ export function GenerationResults({
                   rows={5}
                 />
                 <div className="result-card-actions">
-                  {onRegenerateItem ? (
-                    <button
-                      type="button"
-                      className="copy-button"
-                      onClick={() =>
-                        onRegenerateItem({
-                          kind: "thread-post",
-                          index,
-                          currentTexts: result.threads[0].posts.map((item) => item.text),
-                        })
-                      }
-                      disabled={isRegenerating}
-                    >
-                      <ArrowsClockwise size={16} weight="bold" aria-hidden="true" />
-                      {regeneratingTarget === `thread-post:${index}`
-                        ? copy.regeneratingItem
-                        : copy.regenerateItem}
-                    </button>
-                  ) : null}
                   {canGenerateImage ? (
                     <button
                       type="button"
@@ -326,19 +284,6 @@ export function GenerationResults({
             rows={10}
           />
           <div className="result-card-actions">
-            {onRegenerateItem ? (
-              <button
-                type="button"
-                className="copy-button"
-                onClick={() =>
-                  onRegenerateItem({ kind: "candidate", index: 0, currentTexts: [result.rawText] })
-                }
-                disabled={isRegenerating}
-              >
-                <ArrowsClockwise size={16} weight="bold" aria-hidden="true" />
-                {regeneratingTarget === "candidate:0" ? copy.regeneratingItem : copy.regenerateItem}
-              </button>
-            ) : null}
             {canGenerateImage ? (
               <button
                 type="button"

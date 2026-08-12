@@ -27,12 +27,12 @@ html,
 body,
 #root {
   min-width: 320px;
-  min-height: 100%;
+  height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
-  min-height: 100dvh;
   background: var(--canvas);
   color: var(--text);
 }
@@ -50,9 +50,9 @@ textarea {
 .app-shell {
   display: grid;
   width: 100%;
-  height: 100dvh;
+  height: 100%;
   min-width: 0;
-  min-height: 100dvh;
+  min-height: 0;
   overflow: hidden;
   grid-template-rows: auto 1fr auto;
   background: var(--canvas);
@@ -439,6 +439,73 @@ textarea {
   color: var(--text-muted);
   font-size: 10px;
   line-height: 1.4;
+}
+
+.settings-disclosure-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-disclosure-trigger {
+  display: grid;
+  width: 100%;
+  min-height: 84px;
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-disclosure-trigger:hover {
+  background: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+}
+
+.settings-disclosure-trigger:focus-visible {
+  position: relative;
+  outline: 2px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.settings-disclosure-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.settings-disclosure-copy strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.settings-disclosure-copy > span {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.settings-disclosure-trigger > svg:last-child {
+  color: var(--text-muted);
+  transition: transform 150ms ease;
+}
+
+.settings-disclosure-trigger > svg:last-child[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+.settings-disclosure-content {
+  padding: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-disclosure-content > .field-grid:first-child,
+.settings-disclosure-content > .settings-subsection:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .settings-card-fields {
@@ -841,6 +908,54 @@ textarea {
   color: var(--text-muted);
   font-size: 12.5px;
   line-height: 1.5;
+}
+
+.create-mode-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 20px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+.create-mode-selector legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.create-mode-selector button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.create-mode-selector button[data-active="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.create-mode-selector button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .create-card {
@@ -1325,39 +1440,91 @@ textarea {
 
 .writing-profile-card {
   display: grid;
-  gap: 14px;
+  gap: 20px;
   margin-top: 20px;
+  padding: 22px;
 }
 
 .writing-profile-card h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: -0.025em;
 }
 
 .writing-profile-card > div:first-child p {
-  margin: 5px 0 0;
+  max-width: 48ch;
+  margin: 7px 0 0;
   color: var(--text-muted);
-  font-size: 10.5px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.65;
 }
 
-.writing-profile-card textarea:focus::placeholder {
+.writing-profile-field {
+  gap: 9px;
+}
+
+.writing-profile-editor {
+  position: relative;
+}
+
+.writing-profile-editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 174px;
+  padding: 14px 14px 38px;
+  resize: vertical;
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.writing-profile-editor textarea:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 14%, transparent);
+}
+
+.writing-profile-editor textarea:focus::placeholder {
   color: transparent;
 }
 
+.writing-profile-count {
+  position: absolute;
+  right: 11px;
+  bottom: 9px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--text-muted);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
 .writing-profile-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  justify-items: end;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .writing-profile-footer > small {
-  max-width: 390px;
+  width: 100%;
   color: var(--text-muted);
-  font-size: 9.5px;
-  line-height: 1.45;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.writing-profile-footer .primary-button {
+  min-width: 128px;
+  min-height: 42px;
+  padding-inline: 16px;
+  white-space: nowrap;
 }
 
 .prompt-editor {
@@ -2191,6 +2358,10 @@ textarea {
   background: color-mix(in srgb, var(--surface-strong) 80%, transparent);
 }
 
+.create-panel > .image-generator {
+  margin-top: 20px;
+}
+
 .prompt-list,
 .history-list {
   gap: 10px;
@@ -2214,6 +2385,23 @@ textarea {
   .restore-prompts {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .writing-profile-card {
+    padding: 18px;
+  }
+
+  .writing-profile-footer .primary-button {
+    width: 100%;
+  }
+
+  .settings-disclosure-trigger {
+    min-height: 78px;
+    padding: 16px;
+  }
+
+  .settings-disclosure-content {
+    padding: 18px 16px;
   }
 }
 
@@ -2284,7 +2472,8 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .advanced-toggle svg {
+  .advanced-toggle svg,
+  .settings-disclosure-trigger > svg:last-child {
     transition: none;
   }
 }

@@ -2,8 +2,10 @@ import {
   CaretDown,
   FileText,
   GearSix,
+  ImageSquare,
   Sparkle,
   StopCircle,
+  TextT,
   UploadSimple,
   WarningCircle,
 } from "@phosphor-icons/react";
@@ -15,12 +17,10 @@ import type {
   GenerationIntent,
   GenerationResult,
   OutputLength,
-  RegenerationInput,
   SourceKind,
 } from "../core/generation/types";
 import { getCustomLengthBounds } from "../core/generation/types";
 import { getRecommendedMaxOutputTokens } from "../core/generation/length";
-import { refreshLengthWarnings } from "../core/generation/result-warnings";
 import {
   isOutputLanguageId,
   OUTPUT_LANGUAGE_OPTIONS,
@@ -48,6 +48,7 @@ import {
 import { loadResolvedPromptLibrary } from "../storage/prompt-repository";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
 import { GenerationResults } from "./GenerationResults";
+import { ImageGenerator } from "./ImageGenerator";
 
 interface CreatePanelProps {
   copy: Messages;
@@ -163,6 +164,7 @@ export function CreatePanel({
   onHistoryChanged,
 }: CreatePanelProps) {
   const [form, setForm] = useState<DraftForm>(initialForm);
+  const [createMode, setCreateMode] = useState<"text" | "image">("text");
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [result, setResult] = useState<GenerationResult>();
@@ -174,7 +176,6 @@ export function CreatePanel({
   const [rawHistorySaved, setRawHistorySaved] = useState(false);
   const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
   const [lastHistoryId, setLastHistoryId] = useState<string>();
-  const [regeneratingTarget, setRegeneratingTarget] = useState<string>();
   const [creationPreferences, setCreationPreferences] = useState(
     createDefaultCreationPreferences(),
   );
@@ -486,92 +487,6 @@ export function CreatePanel({
     await performFullGeneration(lastGenerationInput);
   };
 
-  const regenerateItem = async (target: RegenerationInput["target"]) => {
-    if (!profile || !isConfigured || !lastGenerationInput || !result) {
-      return;
-    }
-    let permissionPromise: Promise<boolean>;
-    try {
-      permissionPromise = requestProviderOriginPermission(profile.baseUrl);
-    } catch (permissionError) {
-      setError(getFriendlyError(permissionError, copy));
-      return;
-    }
-
-    const targetKey = `${target.kind}:${target.index}`;
-    setIsGenerating(true);
-    setRegeneratingTarget(targetKey);
-    setError(undefined);
-    const requestId = createRequestId();
-    activeRequestId.current = requestId;
-    try {
-      const allowed = await permissionPromise;
-      if (!allowed) {
-        throw Object.assign(new Error(copy.errorPermissionRequired), {
-          name: "HOST_PERMISSION_REQUIRED",
-        });
-      }
-      if (activeRequestId.current !== requestId) {
-        return;
-      }
-      const regenerated = await sendExtensionRequest(
-        {
-          type: "text.regenerate",
-          input: { input: lastGenerationInput, target },
-        },
-        { requestId },
-      );
-      if (activeRequestId.current !== requestId) {
-        return;
-      }
-      const replacedResult: GenerationResult =
-        target.kind === "candidate" && result.format === "candidates"
-          ? {
-              ...result,
-              candidates: result.candidates.map((candidate, index) =>
-                index === target.index ? { ...candidate, text: regenerated.text } : candidate,
-              ),
-            }
-          : target.kind === "thread-post" && result.format === "thread"
-            ? {
-                ...result,
-                threads: result.threads.map((thread, threadIndex) =>
-                  threadIndex === 0
-                    ? {
-                        ...thread,
-                        posts: thread.posts.map((post, index) =>
-                          index === target.index ? { ...post, text: regenerated.text } : post,
-                        ),
-                      }
-                    : thread,
-                ),
-              }
-            : target.kind === "candidate" && result.format === "raw"
-              ? { ...result, rawText: regenerated.text }
-              : result;
-      const nextResult = refreshLengthWarnings(replacedResult, lastGenerationInput);
-      setResult(nextResult);
-      if (lastHistoryId) {
-        try {
-          await updateHistoryResult(lastHistoryId, nextResult);
-          onHistoryChanged();
-        } catch {
-          setError(copy.historySaveError);
-        }
-      }
-    } catch (regenerationError) {
-      if (activeRequestId.current === requestId) {
-        setError(getFriendlyError(regenerationError, copy));
-      }
-    } finally {
-      if (activeRequestId.current === requestId) {
-        activeRequestId.current = undefined;
-        setIsGenerating(false);
-        setRegeneratingTarget(undefined);
-      }
-    }
-  };
-
   const syncHistoryOnCopy = async (currentResult: GenerationResult) => {
     if (!lastHistoryId) {
       return;
@@ -622,7 +537,6 @@ export function CreatePanel({
     }
     activeRequestId.current = undefined;
     setIsGenerating(false);
-    setRegeneratingTarget(undefined);
     setError(copy.generationCancelled);
     void sendExtensionRequest({ type: "text.cancel", targetRequestId }).catch(() => undefined);
   };
@@ -649,7 +563,29 @@ export function CreatePanel({
         <span>{copy.createBody}</span>
       </section>
 
-      {!isConfigured ? (
+      <fieldset className="create-mode-selector">
+        <legend>{copy.createModeLabel}</legend>
+        <button
+          type="button"
+          data-active={createMode === "text"}
+          aria-pressed={createMode === "text"}
+          onClick={() => setCreateMode("text")}
+        >
+          <TextT size={17} weight="bold" aria-hidden="true" />
+          {copy.createTextMode}
+        </button>
+        <button
+          type="button"
+          data-active={createMode === "image"}
+          aria-pressed={createMode === "image"}
+          onClick={() => setCreateMode("image")}
+        >
+          <ImageSquare size={17} weight="bold" aria-hidden="true" />
+          {copy.createImageMode}
+        </button>
+      </fieldset>
+
+      {createMode === "text" && !isConfigured ? (
         <section className="onboarding-card" aria-labelledby="onboarding-title">
           <div>
             <p>{copy.onboardingBody}</p>
@@ -676,327 +612,342 @@ export function CreatePanel({
         </section>
       ) : null}
 
-      <form className="create-card" onSubmit={generate}>
-        <label className="form-field source-field">
-          <span>{copy.sourceLabel}</span>
-          <textarea
-            value={form.text}
-            onChange={(event) => {
-              updateForm("text", event.target.value);
-              if (form.sourceKind === "file") {
-                updateForm("sourceKind", "draft");
-                setFileName(undefined);
-              }
-            }}
-            placeholder={copy.sourcePlaceholder}
-            rows={7}
-            disabled={isGenerating}
-          />
-        </label>
-
-        <div className="source-tools">
-          <label className="file-button">
-            <UploadSimple size={16} weight="bold" aria-hidden="true" />
-            <span>{copy.uploadTextFile}</span>
-            <input
-              type="file"
-              accept=".txt,.md,text/plain,text/markdown"
-              onChange={handleFile}
+      {createMode === "text" ? (
+        <form className="create-card" onSubmit={generate}>
+          <label className="form-field source-field">
+            <span>{copy.sourceLabel}</span>
+            <textarea
+              value={form.text}
+              onChange={(event) => {
+                updateForm("text", event.target.value);
+                if (form.sourceKind === "file") {
+                  updateForm("sourceKind", "draft");
+                  setFileName(undefined);
+                }
+              }}
+              placeholder={copy.sourcePlaceholder}
+              rows={7}
               disabled={isGenerating}
             />
           </label>
-          {fileName ? (
-            <span className="file-name">
-              <FileText size={15} aria-hidden="true" />
-              {fileName}
-            </span>
-          ) : null}
-          <span className="input-count">{form.text.length.toLocaleString()} / 100,000</span>
-        </div>
 
-        <fieldset className="format-selector">
-          <legend>{copy.contentTypeLabel}</legend>
-          <div>
-            {(["post", "reply", "quote", "thread", "long-post"] as const).map((contentType) => {
-              const labels: Record<ContentType, string> = {
-                post: copy.contentTypePost,
-                reply: copy.contentTypeReply,
-                quote: copy.contentTypeQuote,
-                thread: copy.contentTypeThread,
-                "long-post": copy.contentTypeLongPost,
-              };
-              const shortLabel =
-                contentType === "post"
-                  ? copy.contentTypePostShort
-                  : contentType === "long-post"
-                    ? copy.contentTypeLongPostShort
-                    : labels[contentType];
-              return (
-                <button
-                  type="button"
-                  aria-label={labels[contentType]}
-                  aria-pressed={form.contentType === contentType}
-                  data-active={form.contentType === contentType}
-                  onClick={() => selectContentType(contentType)}
-                  disabled={isGenerating}
-                  key={contentType}
-                >
-                  {shortLabel}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
-
-        <div className="create-grid">
-          <label className="form-field">
-            <span>{copy.outputLanguageLabel}</span>
-            <select
-              value={form.languageValue}
-              onChange={(event) =>
-                updateForm("languageValue", event.target.value as DraftForm["languageValue"])
-              }
-              disabled={isGenerating}
-            >
-              <option value="follow-source">{copy.languageFollowSource}</option>
-              {OUTPUT_LANGUAGE_OPTIONS.map((option) => (
-                <option value={option.id} key={option.id}>
-                  {option.label}
-                </option>
-              ))}
-              <option value="custom">{copy.languageCustom}</option>
-            </select>
-          </label>
-
-          {form.languageValue === "custom" ? (
-            <label className="form-field field-wide">
-              <span>{copy.customLanguageLabel}</span>
+          <div className="source-tools">
+            <label className="file-button">
+              <UploadSimple size={16} weight="bold" aria-hidden="true" />
+              <span>{copy.uploadTextFile}</span>
               <input
-                value={form.customLanguage}
-                onChange={(event) => updateForm("customLanguage", event.target.value)}
-                placeholder={copy.customLanguagePlaceholder}
-                maxLength={80}
+                type="file"
+                accept=".txt,.md,text/plain,text/markdown"
+                onChange={handleFile}
                 disabled={isGenerating}
               />
             </label>
-          ) : null}
+            {fileName ? (
+              <span className="file-name">
+                <FileText size={15} aria-hidden="true" />
+                {fileName}
+              </span>
+            ) : null}
+            <span className="input-count">{form.text.length.toLocaleString()} / 100,000</span>
+          </div>
 
-          {form.contentType === "reply" || form.contentType === "quote" ? (
-            <label className="form-field field-wide">
-              <span>{copy.intentLabel}</span>
+          <fieldset className="format-selector">
+            <legend>{copy.contentTypeLabel}</legend>
+            <div>
+              {(["post", "reply", "quote", "thread", "long-post"] as const).map((contentType) => {
+                const labels: Record<ContentType, string> = {
+                  post: copy.contentTypePost,
+                  reply: copy.contentTypeReply,
+                  quote: copy.contentTypeQuote,
+                  thread: copy.contentTypeThread,
+                  "long-post": copy.contentTypeLongPost,
+                };
+                const shortLabel =
+                  contentType === "post"
+                    ? copy.contentTypePostShort
+                    : contentType === "long-post"
+                      ? copy.contentTypeLongPostShort
+                      : labels[contentType];
+                return (
+                  <button
+                    type="button"
+                    aria-label={labels[contentType]}
+                    aria-pressed={form.contentType === contentType}
+                    data-active={form.contentType === contentType}
+                    onClick={() => selectContentType(contentType)}
+                    disabled={isGenerating}
+                    key={contentType}
+                  >
+                    {shortLabel}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <div className="create-grid">
+            <label className="form-field">
+              <span>{copy.outputLanguageLabel}</span>
               <select
-                value={form.intent}
-                onChange={(event) => updateForm("intent", event.target.value as GenerationIntent)}
+                value={form.languageValue}
+                onChange={(event) =>
+                  updateForm("languageValue", event.target.value as DraftForm["languageValue"])
+                }
                 disabled={isGenerating}
               >
-                {form.contentType === "reply" ? (
-                  <>
-                    <option value="agree-and-add">{copy.replyIntentAgreeAndAdd}</option>
-                    <option value="respectful-disagree">
-                      {copy.replyIntentRespectfulDisagree}
-                    </option>
-                    <option value="question">{copy.replyIntentQuestion}</option>
-                    <option value="humorous">{copy.replyIntentHumorous}</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="comment">{copy.quoteIntentComment}</option>
-                    <option value="summarize">{copy.quoteIntentSummarize}</option>
-                    <option value="extend">{copy.quoteIntentExtend}</option>
-                  </>
-                )}
+                <option value="follow-source">{copy.languageFollowSource}</option>
+                {OUTPUT_LANGUAGE_OPTIONS.map((option) => (
+                  <option value={option.id} key={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+                <option value="custom">{copy.languageCustom}</option>
               </select>
             </label>
-          ) : null}
 
-          <label className="form-field">
-            <span>{copy.styleLabel}</span>
-            <select
-              value={form.styleId}
-              onChange={(event) => updateForm("styleId", event.target.value)}
-              disabled={isGenerating}
-            >
-              {styles.map((style) => (
-                <option value={style.id} key={style.id}>
-                  {style.source === "built-in" && !style.isOverridden
-                    ? (styleLabels[style.id] ?? style.label)
-                    : style.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="form-field">
-            <span>{copy.lengthLabel}</span>
-            <select
-              value={form.length}
-              onChange={(event) => updateForm("length", event.target.value as OutputLength)}
-              disabled={isGenerating}
-            >
-              <option value="short">{lengthLabels.short}</option>
-              <option value="medium">{lengthLabels.medium}</option>
-              <option value="long">{lengthLabels.long}</option>
-              <option value="custom">{lengthLabels.custom}</option>
-            </select>
-          </label>
-
-          {form.length === "custom" ? (
-            <label className="form-field field-wide compact-number-field">
-              <span>
-                {form.contentType === "thread"
-                  ? copy.customLengthPerPostLabel
-                  : copy.customLengthLabel}
-              </span>
-              <input
-                type="number"
-                aria-label={
-                  form.contentType === "thread"
-                    ? copy.customLengthPerPostLabel
-                    : copy.customLengthLabel
-                }
-                min={getCustomLengthBounds(form.contentType).min}
-                max={getCustomLengthBounds(form.contentType).max}
-                value={form.customLength}
-                onChange={(event) => updateForm("customLength", Number(event.target.value))}
-                disabled={isGenerating}
-              />
-              <small>
-                {copy.customLengthRangeHint
-                  .replace("{min}", getCustomLengthBounds(form.contentType).min.toLocaleString())
-                  .replace("{max}", getCustomLengthBounds(form.contentType).max.toLocaleString())}
-              </small>
-            </label>
-          ) : null}
-        </div>
-
-        <button
-          type="button"
-          className="advanced-toggle"
-          aria-expanded={advancedOpen}
-          onClick={toggleAdvanced}
-          disabled={isGenerating}
-        >
-          <span>{copy.advancedWritingTitle}</span>
-          <CaretDown size={16} data-open={advancedOpen} />
-        </button>
-
-        {advancedOpen ? (
-          <div className="advanced-fields create-advanced-fields">
-            <label className="form-field">
-              <span>{copy.audienceLabel}</span>
-              <input
-                value={form.audience}
-                onChange={(event) => updateForm("audience", event.target.value)}
-                maxLength={500}
-                disabled={isGenerating}
-              />
-            </label>
-            <label className="form-field">
-              <span>{copy.goalLabel}</span>
-              <input
-                value={form.goal}
-                onChange={(event) => updateForm("goal", event.target.value)}
-                maxLength={500}
-                disabled={isGenerating}
-              />
-            </label>
-            <label className="form-field field-wide">
-              <span>{copy.toneLabel}</span>
-              <input
-                value={form.tone}
-                onChange={(event) => updateForm("tone", event.target.value)}
-                maxLength={500}
-                disabled={isGenerating}
-              />
-            </label>
-            <label className="form-field">
-              <span>{copy.mustIncludeLabel}</span>
-              <textarea
-                value={form.mustInclude}
-                onChange={(event) => updateForm("mustInclude", event.target.value)}
-                rows={3}
-                maxLength={1000}
-                disabled={isGenerating}
-              />
-            </label>
-            <label className="form-field">
-              <span>{copy.mustAvoidLabel}</span>
-              <textarea
-                value={form.mustAvoid}
-                onChange={(event) => updateForm("mustAvoid", event.target.value)}
-                rows={3}
-                maxLength={1000}
-                disabled={isGenerating}
-              />
-            </label>
-            {form.contentType === "thread" ? (
-              <label className="form-field field-wide compact-number-field">
-                <span>{copy.threadCountLabel}</span>
+            {form.languageValue === "custom" ? (
+              <label className="form-field field-wide">
+                <span>{copy.customLanguageLabel}</span>
                 <input
-                  type="number"
-                  min="2"
-                  max="20"
-                  value={form.threadCount}
-                  onChange={(event) => updateForm("threadCount", Number(event.target.value))}
-                  disabled={isGenerating}
-                />
-              </label>
-            ) : form.contentType !== "long-post" ? (
-              <label className="form-field field-wide compact-number-field">
-                <span>{copy.candidateCountLabel}</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="5"
-                  value={form.candidateCount}
-                  onChange={(event) => updateForm("candidateCount", Number(event.target.value))}
+                  value={form.customLanguage}
+                  onChange={(event) => updateForm("customLanguage", event.target.value)}
+                  placeholder={copy.customLanguagePlaceholder}
+                  maxLength={80}
                   disabled={isGenerating}
                 />
               </label>
             ) : null}
-          </div>
-        ) : null}
 
-        {error ? (
-          <div className="feedback" data-kind="error" role="alert">
-            <WarningCircle size={18} weight="fill" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
-        ) : null}
+            {form.contentType === "reply" || form.contentType === "quote" ? (
+              <label className="form-field field-wide">
+                <span>{copy.intentLabel}</span>
+                <select
+                  value={form.intent}
+                  onChange={(event) => updateForm("intent", event.target.value as GenerationIntent)}
+                  disabled={isGenerating}
+                >
+                  {form.contentType === "reply" ? (
+                    <>
+                      <option value="agree-and-add">{copy.replyIntentAgreeAndAdd}</option>
+                      <option value="respectful-disagree">
+                        {copy.replyIntentRespectfulDisagree}
+                      </option>
+                      <option value="question">{copy.replyIntentQuestion}</option>
+                      <option value="humorous">{copy.replyIntentHumorous}</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="comment">{copy.quoteIntentComment}</option>
+                      <option value="summarize">{copy.quoteIntentSummarize}</option>
+                      <option value="extend">{copy.quoteIntentExtend}</option>
+                    </>
+                  )}
+                </select>
+              </label>
+            ) : null}
 
-        {hasTokenBudgetWarning ? (
-          <div className="feedback" data-kind="warning" role="status">
-            <WarningCircle size={18} weight="fill" aria-hidden="true" />
-            <span>
-              {copy.tokenBudgetWarning
-                .replace("{current}", profile?.maxOutputTokens.toLocaleString() ?? "")
-                .replace("{recommended}", recommendedMaxOutputTokens.toLocaleString())}
-            </span>
-          </div>
-        ) : null}
+            <label className="form-field">
+              <span>{copy.styleLabel}</span>
+              <select
+                value={form.styleId}
+                onChange={(event) => updateForm("styleId", event.target.value)}
+                disabled={isGenerating}
+              >
+                {styles.map((style) => (
+                  <option value={style.id} key={style.id}>
+                    {style.source === "built-in" && !style.isOverridden
+                      ? (styleLabels[style.id] ?? style.label)
+                      : style.label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <div className="generate-actions">
-          {isGenerating ? (
-            <button type="button" className="secondary-button" onClick={cancelGeneration}>
-              <StopCircle size={17} weight="bold" aria-hidden="true" />
-              {copy.cancelGeneration}
-            </button>
-          ) : null}
-          <button type="submit" className="primary-button generate-button" disabled={isGenerating}>
-            <Sparkle size={17} weight="fill" aria-hidden="true" />
-            {isGenerating ? copy.generating : copy.generate}
+            <label className="form-field">
+              <span>{copy.lengthLabel}</span>
+              <select
+                value={form.length}
+                onChange={(event) => updateForm("length", event.target.value as OutputLength)}
+                disabled={isGenerating}
+              >
+                <option value="short">{lengthLabels.short}</option>
+                <option value="medium">{lengthLabels.medium}</option>
+                <option value="long">{lengthLabels.long}</option>
+                <option value="custom">{lengthLabels.custom}</option>
+              </select>
+            </label>
+
+            {form.length === "custom" ? (
+              <label className="form-field field-wide compact-number-field">
+                <span>
+                  {form.contentType === "thread"
+                    ? copy.customLengthPerPostLabel
+                    : copy.customLengthLabel}
+                </span>
+                <input
+                  type="number"
+                  aria-label={
+                    form.contentType === "thread"
+                      ? copy.customLengthPerPostLabel
+                      : copy.customLengthLabel
+                  }
+                  min={getCustomLengthBounds(form.contentType).min}
+                  max={getCustomLengthBounds(form.contentType).max}
+                  value={form.customLength}
+                  onChange={(event) => updateForm("customLength", Number(event.target.value))}
+                  disabled={isGenerating}
+                />
+                <small>
+                  {copy.customLengthRangeHint
+                    .replace("{min}", getCustomLengthBounds(form.contentType).min.toLocaleString())
+                    .replace("{max}", getCustomLengthBounds(form.contentType).max.toLocaleString())}
+                </small>
+              </label>
+            ) : null}
+          </div>
+
+          <button
+            type="button"
+            className="advanced-toggle"
+            aria-expanded={advancedOpen}
+            onClick={toggleAdvanced}
+            disabled={isGenerating}
+          >
+            <span>{copy.advancedWritingTitle}</span>
+            <CaretDown size={16} data-open={advancedOpen} />
           </button>
-        </div>
-        <p className="provider-disclosure">
-          {isConfigured && profile
-            ? copy.providerDisclosure
-                .replace("{provider}", profile.displayName)
-                .replace("{origin}", new URL(profile.baseUrl).origin)
-            : copy.localDraftNote}
-        </p>
-      </form>
 
-      {result ? (
+          {advancedOpen ? (
+            <div className="advanced-fields create-advanced-fields">
+              <label className="form-field">
+                <span>{copy.audienceLabel}</span>
+                <input
+                  value={form.audience}
+                  onChange={(event) => updateForm("audience", event.target.value)}
+                  maxLength={500}
+                  disabled={isGenerating}
+                />
+              </label>
+              <label className="form-field">
+                <span>{copy.goalLabel}</span>
+                <input
+                  value={form.goal}
+                  onChange={(event) => updateForm("goal", event.target.value)}
+                  maxLength={500}
+                  disabled={isGenerating}
+                />
+              </label>
+              <label className="form-field field-wide">
+                <span>{copy.toneLabel}</span>
+                <input
+                  value={form.tone}
+                  onChange={(event) => updateForm("tone", event.target.value)}
+                  maxLength={500}
+                  disabled={isGenerating}
+                />
+              </label>
+              <label className="form-field">
+                <span>{copy.mustIncludeLabel}</span>
+                <textarea
+                  value={form.mustInclude}
+                  onChange={(event) => updateForm("mustInclude", event.target.value)}
+                  rows={3}
+                  maxLength={1000}
+                  disabled={isGenerating}
+                />
+              </label>
+              <label className="form-field">
+                <span>{copy.mustAvoidLabel}</span>
+                <textarea
+                  value={form.mustAvoid}
+                  onChange={(event) => updateForm("mustAvoid", event.target.value)}
+                  rows={3}
+                  maxLength={1000}
+                  disabled={isGenerating}
+                />
+              </label>
+              {form.contentType === "thread" ? (
+                <label className="form-field field-wide compact-number-field">
+                  <span>{copy.threadCountLabel}</span>
+                  <input
+                    type="number"
+                    min="2"
+                    max="20"
+                    value={form.threadCount}
+                    onChange={(event) => updateForm("threadCount", Number(event.target.value))}
+                    disabled={isGenerating}
+                  />
+                </label>
+              ) : form.contentType !== "long-post" ? (
+                <label className="form-field field-wide compact-number-field">
+                  <span>{copy.candidateCountLabel}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="5"
+                    value={form.candidateCount}
+                    onChange={(event) => updateForm("candidateCount", Number(event.target.value))}
+                    disabled={isGenerating}
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+
+          {error ? (
+            <div className="feedback" data-kind="error" role="alert">
+              <WarningCircle size={18} weight="fill" aria-hidden="true" />
+              <span>{error}</span>
+            </div>
+          ) : null}
+
+          {hasTokenBudgetWarning ? (
+            <div className="feedback" data-kind="warning" role="status">
+              <WarningCircle size={18} weight="fill" aria-hidden="true" />
+              <span>
+                {copy.tokenBudgetWarning
+                  .replace("{current}", profile?.maxOutputTokens.toLocaleString() ?? "")
+                  .replace("{recommended}", recommendedMaxOutputTokens.toLocaleString())}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="generate-actions">
+            {isGenerating ? (
+              <button type="button" className="secondary-button" onClick={cancelGeneration}>
+                <StopCircle size={17} weight="bold" aria-hidden="true" />
+                {copy.cancelGeneration}
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              className="primary-button generate-button"
+              disabled={isGenerating}
+            >
+              <Sparkle size={17} weight="fill" aria-hidden="true" />
+              {isGenerating ? copy.generating : copy.generate}
+            </button>
+          </div>
+          <p className="provider-disclosure">
+            {isConfigured && profile
+              ? copy.providerDisclosure
+                  .replace("{provider}", profile.displayName)
+                  .replace("{origin}", new URL(profile.baseUrl).origin)
+              : copy.localDraftNote}
+          </p>
+        </form>
+      ) : (
+        <ImageGenerator
+          copy={copy}
+          sourceText=""
+          snapshot={snapshot}
+          onOpenSettings={onOpenSettings}
+          onClose={() => setCreateMode("text")}
+          mode="standalone"
+        />
+      )}
+
+      {createMode === "text" && result ? (
         <GenerationResults
           copy={copy}
           result={result}
@@ -1009,8 +960,6 @@ export function CreatePanel({
           onImageGenerated={saveImageMetadata}
           onCopied={syncHistoryOnCopy}
           onRegenerateAll={regenerateAll}
-          onRegenerateItem={regenerateItem}
-          regeneratingTarget={regeneratingTarget}
           isRegenerating={isGenerating}
         />
       ) : null}

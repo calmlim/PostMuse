@@ -61,4 +61,23 @@ describe("settings repository", () => {
     });
     expect(local.set).toHaveBeenCalledTimes(1);
   });
+
+  it("adds API versions only to legacy official defaults and preserves custom paths", async () => {
+    const current = createDefaultSettings("en");
+    local.data[SETTINGS_STORAGE_KEY] = {
+      ...current,
+      textProviderProfiles: [
+        { ...current.textProviderProfiles[0], baseUrl: "https://api.openai.com" },
+      ],
+      imageProviderProfiles: [
+        { ...current.imageProviderProfiles[0], baseUrl: "https://gateway.example.com/openai" },
+      ],
+    };
+
+    await expect(loadSettings()).resolves.toMatchObject({
+      textProviderProfiles: [{ baseUrl: "https://api.openai.com/v1" }],
+      imageProviderProfiles: [{ baseUrl: "https://gateway.example.com/openai" }],
+    });
+    expect(local.set).toHaveBeenCalledTimes(1);
+  });
 });

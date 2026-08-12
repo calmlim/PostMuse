@@ -7,18 +7,14 @@ export const appendApiPath = (baseUrl: string, apiPath: string): string => {
   });
   const base = new URL(normalized);
   const cleanApiPath = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
-  const pathWithoutDuplicateVersion =
-    base.pathname.endsWith("/v1") && cleanApiPath.startsWith("/v1/")
-      ? cleanApiPath.slice(3)
-      : cleanApiPath;
 
-  base.pathname = `${base.pathname.replace(/\/$/, "")}${pathWithoutDuplicateVersion}`;
+  base.pathname = `${base.pathname.replace(/\/$/, "")}${cleanApiPath}`;
   return base.toString();
 };
 
 export const createGeminiEndpoint = (baseUrl: string, model: string): string => {
   void model;
-  return appendApiPath(baseUrl, "/v1beta/interactions");
+  return appendApiPath(baseUrl, "/interactions");
 };
 
 export const isOfficialOpenAIEndpoint = (baseUrl: string): boolean => {

@@ -91,6 +91,7 @@ describe("text provider adapters", () => {
       signal: new AbortController().signal,
       purpose: "generation",
     });
+    expect(fetchMock.mock.calls[0][0]).toBe("https://llm.example.com/api/chat/completions");
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
     expect(body).toMatchObject({ max_tokens: 1200, temperature: 1.1 });
     expect(body).not.toHaveProperty("max_completion_tokens");

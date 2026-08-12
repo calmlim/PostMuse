@@ -17,22 +17,22 @@ export const PROVIDER_DEFINITIONS: Record<ProviderId, ProviderDefinition> = {
   "openai-compatible": {
     id: "openai-compatible",
     label: "OpenAI-compatible",
-    defaultBaseUrl: "https://api.openai.com",
+    defaultBaseUrl: "https://api.openai.com/v1",
   },
   anthropic: {
     id: "anthropic",
     label: "Anthropic",
-    defaultBaseUrl: "https://api.anthropic.com",
+    defaultBaseUrl: "https://api.anthropic.com/v1",
   },
   gemini: {
     id: "gemini",
     label: "Gemini",
-    defaultBaseUrl: "https://generativelanguage.googleapis.com",
+    defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
   },
   xai: {
     id: "xai",
     label: "xAI",
-    defaultBaseUrl: "https://api.x.ai",
+    defaultBaseUrl: "https://api.x.ai/v1",
   },
 };
 
@@ -40,13 +40,13 @@ export const IMAGE_PROVIDER_DEFINITIONS: Record<ImageProviderId, ImageProviderDe
   openai: {
     id: "openai",
     label: "OpenAI Images",
-    defaultBaseUrl: "https://api.openai.com",
+    defaultBaseUrl: "https://api.openai.com/v1",
     defaultModel: "gpt-image-2",
   },
   gemini: {
     id: "gemini",
     label: "Gemini Images",
-    defaultBaseUrl: "https://generativelanguage.googleapis.com",
+    defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
     defaultModel: "gemini-3.1-flash-image",
   },
 };
