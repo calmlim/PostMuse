@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { build } from "vite";
 
@@ -20,6 +20,10 @@ if (watch && profile === "store") {
 
 await build({ configFile: "vite.config.ts", mode, build: buildOverride });
 await build({ configFile: "vite.content.config.ts", mode, build: buildOverride });
+await Promise.all([
+  copyFile("LICENSE", "dist/LICENSE"),
+  copyFile("THIRD_PARTY_NOTICES", "dist/THIRD_PARTY_NOTICES"),
+]);
 
 if (!watch) {
   const contentScript = await readFile("dist/assets/content.js", "utf8");
