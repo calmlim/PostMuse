@@ -51,7 +51,7 @@ describe("live Provider connection tester", () => {
           body.max_tokens ??
           body.maxOutputTokens ??
           body.generation_config?.max_output_tokens,
-      ).toBe(64);
+      ).toBe(256);
       expect(body).not.toHaveProperty("temperature");
     });
   }

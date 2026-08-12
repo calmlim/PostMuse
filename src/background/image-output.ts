@@ -57,7 +57,12 @@ export const conformImageOutput = async (
   input: ImageGenerationInput,
 ): Promise<ImageGenerationResult> => {
   const target = getExpectedImageDimensions(result.provider, input.size, input.aspectRatio);
-  const bytes = base64ToBytes(result.base64Data);
+  let bytes: Uint8Array;
+  try {
+    bytes = base64ToBytes(result.base64Data);
+  } catch {
+    throw new AppError("OUTPUT_INVALID", "The Provider returned invalid image data.");
+  }
   const actual = readImageDimensions(bytes, result.mimeType);
   if (actual?.width === target.width && actual.height === target.height) {
     return { ...result, pixelWidth: actual.width, pixelHeight: actual.height };

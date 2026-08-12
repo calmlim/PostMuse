@@ -1,31 +1,34 @@
 import { AppError } from "../../core/errors/app-error";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath, isOfficialOpenAIEndpoint } from "../shared/endpoints";
-import { fetchWithPolicy, readJsonResponse } from "../shared/http";
+import { fetchJsonWithPolicy } from "../shared/http";
 import { getTextRequestTimeout, type TextProviderAdapter } from "./types";
 
 export const openAICompatibleAdapter: TextProviderAdapter = {
   id: "openai-compatible",
   async generate(request, { profile, apiKey, signal, purpose }) {
     const officialOpenAI = isOfficialOpenAIEndpoint(profile.baseUrl);
+    const legacyOfficialModel =
+      officialOpenAI && /^gpt-(?:3\.5|4)(?:-|$)/i.test(profile.model.trim());
     const body: Record<string, unknown> = {
       model: profile.model,
       messages: [
         { role: "system", content: request.system },
         { role: "user", content: request.user },
       ],
-      [officialOpenAI ? "max_completion_tokens" : "max_tokens"]: profile.maxOutputTokens,
+      [officialOpenAI && !legacyOfficialModel ? "max_completion_tokens" : "max_tokens"]:
+        profile.maxOutputTokens,
     };
     if (profile.samplingMode === "custom") {
       body.temperature = profile.temperature;
     }
-    if (officialOpenAI) {
+    if (officialOpenAI && !legacyOfficialModel) {
       body.response_format = {
         type: "json_schema",
         json_schema: { name: request.schemaName, strict: true, schema: request.schema },
       };
     }
-    const response = await fetchWithPolicy(
+    const payload = await fetchJsonWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/chat/completions"),
       {
         method: "POST",
@@ -38,8 +41,6 @@ export const openAICompatibleAdapter: TextProviderAdapter = {
       signal,
       { timeoutMs: getTextRequestTimeout(purpose), maxRetries: 0 },
     );
-    const payload = await readJsonResponse(response);
-
     if (!isRecordValue(payload) || !Array.isArray(payload.choices)) {
       throw new AppError("OUTPUT_INVALID", "The Provider returned no choices.");
     }

@@ -1,13 +1,13 @@
 import { AppError } from "../../core/errors/app-error";
 import { isRecordValue } from "../../core/settings/validation";
 import { createGeminiEndpoint } from "../shared/endpoints";
-import { fetchWithPolicy, readJsonResponse } from "../shared/http";
+import { fetchJsonWithPolicy } from "../shared/http";
 import { getTextRequestTimeout, type TextProviderAdapter } from "./types";
 
 export const geminiAdapter: TextProviderAdapter = {
   id: "gemini",
   async generate(request, { profile, apiKey, signal, purpose }) {
-    const response = await fetchWithPolicy(
+    const payload = await fetchJsonWithPolicy(
       createGeminiEndpoint(profile.baseUrl, profile.model),
       {
         method: "POST",
@@ -31,8 +31,6 @@ export const geminiAdapter: TextProviderAdapter = {
       signal,
       { timeoutMs: getTextRequestTimeout(purpose), maxRetries: 0 },
     );
-    const payload = await readJsonResponse(response);
-
     if (!isRecordValue(payload)) {
       throw new AppError("OUTPUT_INVALID", "Gemini returned an invalid response.");
     }

@@ -97,6 +97,26 @@ describe("text provider adapters", () => {
     expect(body).not.toHaveProperty("response_format");
   });
 
+  it("uses legacy Chat Completions fields for older official OpenAI models", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '{"candidates":[]}' } }] }), {
+        status: 200,
+      }),
+    );
+
+    await openAICompatibleAdapter.generate(request, {
+      profile: { ...profileFor("openai-compatible"), model: "gpt-4-turbo" },
+      apiKey: "test-secret-value",
+      signal: new AbortController().signal,
+      purpose: "generation",
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body).toMatchObject({ max_tokens: 1200 });
+    expect(body).not.toHaveProperty("max_completion_tokens");
+    expect(body).not.toHaveProperty("response_format");
+  });
+
   it("maps Anthropic Messages without a temperature override", async () => {
     fetchMock.mockResolvedValue(
       new Response(

@@ -9,6 +9,7 @@ import {
 import { useState } from "react";
 import type { GenerationInput, RegenerationInput } from "../core/generation/types";
 import { countUnicodeCharacters, getLengthStatus } from "../core/generation/length";
+import { refreshLengthWarnings } from "../core/generation/result-warnings";
 import type { ImageHistoryMetadata } from "../core/image/types";
 import type { SettingsSnapshot } from "../core/settings/types";
 import type { GenerationResult } from "../core/generation/types";
@@ -52,6 +53,7 @@ export function GenerationResults({
 }: GenerationResultsProps) {
   const [copyStatus, setCopyStatus] = useState<string>();
   const [imageSource, setImageSource] = useState<ImageSource>();
+  const canGenerateImage = settingsSnapshot !== undefined;
   const warningMessages = [
     ...(result.format === "raw" ? [copy.rawFallbackNotice] : []),
     ...(result.warnings.some((warning) => warning.startsWith("PARTIAL_"))
@@ -99,7 +101,8 @@ export function GenerationResults({
     const candidates = result.candidates.map((candidate, candidateIndex) =>
       candidateIndex === index ? { ...candidate, text } : candidate,
     );
-    onChange({ ...result, candidates });
+    const nextResult: GenerationResult = { ...result, candidates };
+    onChange(input ? refreshLengthWarnings(nextResult, input) : nextResult);
   };
 
   const updateThreadPost = (postIndex: number, text: string) => {
@@ -116,7 +119,8 @@ export function GenerationResults({
           }
         : thread,
     );
-    onChange({ ...result, threads });
+    const nextResult: GenerationResult = { ...result, threads };
+    onChange(input ? refreshLengthWarnings(nextResult, input) : nextResult);
   };
 
   return (
@@ -202,14 +206,16 @@ export function GenerationResults({
                         : copy.regenerateItem}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="copy-button"
-                    onClick={() => setImageSource({ kind: "candidate", index })}
-                  >
-                    <ImageSquare size={16} weight="bold" aria-hidden="true" />
-                    {copy.generateImage}
-                  </button>
+                  {canGenerateImage ? (
+                    <button
+                      type="button"
+                      className="copy-button"
+                      onClick={() => setImageSource({ kind: "candidate", index })}
+                    >
+                      <ImageSquare size={16} weight="bold" aria-hidden="true" />
+                      {copy.generateImage}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="copy-button"
@@ -270,14 +276,16 @@ export function GenerationResults({
                         : copy.regenerateItem}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="copy-button"
-                    onClick={() => setImageSource({ kind: "thread", index })}
-                  >
-                    <ImageSquare size={16} weight="bold" aria-hidden="true" />
-                    {copy.generateImage}
-                  </button>
+                  {canGenerateImage ? (
+                    <button
+                      type="button"
+                      className="copy-button"
+                      onClick={() => setImageSource({ kind: "thread", index })}
+                    >
+                      <ImageSquare size={16} weight="bold" aria-hidden="true" />
+                      {copy.generateImage}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="copy-button"
@@ -311,18 +319,36 @@ export function GenerationResults({
           <textarea
             aria-label={copy.rawResultLabel}
             value={result.rawText}
-            onChange={(event) => onChange({ ...result, rawText: event.target.value })}
+            onChange={(event) => {
+              const nextResult: GenerationResult = { ...result, rawText: event.target.value };
+              onChange(input ? refreshLengthWarnings(nextResult, input) : nextResult);
+            }}
             rows={10}
           />
           <div className="result-card-actions">
-            <button
-              type="button"
-              className="copy-button"
-              onClick={() => setImageSource({ kind: "raw", index: 0 })}
-            >
-              <ImageSquare size={16} weight="bold" aria-hidden="true" />
-              {copy.generateImage}
-            </button>
+            {onRegenerateItem ? (
+              <button
+                type="button"
+                className="copy-button"
+                onClick={() =>
+                  onRegenerateItem({ kind: "candidate", index: 0, currentTexts: [result.rawText] })
+                }
+                disabled={isRegenerating}
+              >
+                <ArrowsClockwise size={16} weight="bold" aria-hidden="true" />
+                {regeneratingTarget === "candidate:0" ? copy.regeneratingItem : copy.regenerateItem}
+              </button>
+            ) : null}
+            {canGenerateImage ? (
+              <button
+                type="button"
+                className="copy-button"
+                onClick={() => setImageSource({ kind: "raw", index: 0 })}
+              >
+                <ImageSquare size={16} weight="bold" aria-hidden="true" />
+                {copy.generateImage}
+              </button>
+            ) : null}
             {onSaveRaw ? (
               <button
                 type="button"
@@ -346,7 +372,7 @@ export function GenerationResults({
         </article>
       ) : null}
 
-      {selectedImageText ? (
+      {canGenerateImage && selectedImageText ? (
         <ImageGenerator
           copy={copy}
           sourceText={selectedImageText}

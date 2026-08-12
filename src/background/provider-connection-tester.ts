@@ -31,7 +31,7 @@ export const runConnectionTest = async (
     profile: {
       ...profile,
       samplingMode: "provider-default",
-      maxOutputTokens: Math.min(profile.maxOutputTokens, 64),
+      maxOutputTokens: Math.min(profile.maxOutputTokens, 256),
     },
     apiKey,
     signal,

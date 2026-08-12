@@ -43,6 +43,34 @@ const createRelatedContext = (
   return { text, ...parseStatusLink(statusLink) };
 };
 
+const statusIdFromUrl = (value: string | undefined): string | undefined =>
+  value?.match(/\/status\/(\d+)/)?.[1];
+
+const findVisibleParentPost = (
+  article: HTMLElement,
+  selectedPostUrl: string | undefined,
+): XRelatedPostContext | undefined => {
+  const routeStatusId = statusIdFromUrl(window.location.pathname);
+  if (!routeStatusId || statusIdFromUrl(selectedPostUrl) !== routeStatusId) {
+    return undefined;
+  }
+
+  const visiblePosts = Array.from(document.querySelectorAll<HTMLElement>(X_SELECTORS.post)).filter(
+    (post) => !post.parentElement?.closest(X_SELECTORS.post),
+  );
+  const selectedIndex = visiblePosts.indexOf(article);
+  if (selectedIndex <= 0) {
+    return undefined;
+  }
+
+  const parent = visiblePosts[selectedIndex - 1];
+  const parentText = ownedElements(parent, X_SELECTORS.postText)[0];
+  const parentStatus = ownedElements(parent, X_SELECTORS.statusLink)[0] as
+    | HTMLAnchorElement
+    | undefined;
+  return createRelatedContext(parentText, parentStatus);
+};
+
 export const findXPostActionBar = (article: HTMLElement): HTMLElement | undefined => {
   const replyAction = ownedElements(article, X_SELECTORS.replyAction)[0];
   const actionGroup = replyAction?.closest<HTMLElement>(X_SELECTORS.actionGroup);
@@ -78,6 +106,10 @@ export const extractXPost = (article: HTMLElement | null): XPostExtractionResult
   const quotedPost = createRelatedContext(textElements[1], statusLinks[1]);
   if (quotedPost) {
     context.quotedPost = quotedPost;
+  }
+  const parentPost = findVisibleParentPost(article, primaryStatus.postUrl);
+  if (parentPost) {
+    context.parentPost = parentPost;
   }
   return { ok: true, context };
 };

@@ -1,7 +1,7 @@
 import { AppError } from "../../core/errors/app-error";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
-import { fetchWithPolicy, readJsonResponse } from "../shared/http";
+import { fetchJsonWithPolicy } from "../shared/http";
 import { getTextRequestTimeout, type TextProviderAdapter } from "./types";
 
 export const xAIAdapter: TextProviderAdapter = {
@@ -22,7 +22,7 @@ export const xAIAdapter: TextProviderAdapter = {
     if (profile.samplingMode === "custom") {
       body.temperature = profile.temperature;
     }
-    const response = await fetchWithPolicy(
+    const payload = await fetchJsonWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/chat/completions"),
       {
         method: "POST",
@@ -35,8 +35,6 @@ export const xAIAdapter: TextProviderAdapter = {
       signal,
       { timeoutMs: getTextRequestTimeout(purpose), maxRetries: 0 },
     );
-    const payload = await readJsonResponse(response);
-
     const choices = isRecordValue(payload) && Array.isArray(payload.choices) ? payload.choices : [];
     const firstChoice = choices[0];
     if (

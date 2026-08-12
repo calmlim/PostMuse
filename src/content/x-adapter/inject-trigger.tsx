@@ -1,8 +1,14 @@
 import { Sparkle } from "@phosphor-icons/react";
-import type { MouseEvent as ReactMouseEvent, SyntheticEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type SyntheticEvent,
+} from "react";
 import { createRoot } from "react-dom/client";
+import { sendInlineRequest } from "../inline-client";
 import { getInlineMessages } from "../../i18n/inline";
-import { resolveLocale } from "../../i18n/locale";
+import { detectPreferredLocale, type Locale } from "../../i18n/locale";
 import { InlinePanel } from "../inline-app/InlinePanel";
 import type { MountedXPost } from "../observer";
 import { extractXPost, findXPostActionBar } from "./extract-post";
@@ -17,7 +23,14 @@ const triggerStyles = `
   @media (prefers-color-scheme: dark) { button { color: rgb(113, 118, 123); } button:hover { color: rgb(138, 175, 255); } }
 `;
 
-const pageLocale = () => resolveLocale(document.documentElement.lang);
+let configuredLocalePromise: Promise<Locale> | undefined;
+
+const getConfiguredLocale = (): Promise<Locale> => {
+  configuredLocalePromise ??= sendInlineRequest({ type: "inline.bootstrap" })
+    .then(({ locale }) => locale)
+    .catch(() => detectPreferredLocale());
+  return configuredLocalePromise;
+};
 
 const isPostDetailPage = (): boolean =>
   /^\/(?:i\/web|[^/]+)\/status\/\d+(?:\/|$)/.test(window.location.pathname);
@@ -27,7 +40,19 @@ interface TriggerProps {
 }
 
 function InlineTrigger({ onClick }: TriggerProps) {
-  const copy = getInlineMessages(pageLocale());
+  const [locale, setLocale] = useState<Locale>(detectPreferredLocale);
+  useEffect(() => {
+    let active = true;
+    void getConfiguredLocale().then((configuredLocale) => {
+      if (active) {
+        setLocale(configuredLocale);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const copy = getInlineMessages(locale);
   const stopPointerPropagation = (event: SyntheticEvent) => {
     event.stopPropagation();
   };

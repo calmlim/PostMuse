@@ -21,6 +21,7 @@ const createPost = (options: { quoted?: boolean; text?: string } = {}): HTMLElem
 
 afterEach(() => {
   document.body.replaceChildren();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("X post extraction", () => {
@@ -56,6 +57,36 @@ describe("X post extraction", () => {
       ok: true,
       context: { text: "A focused product lesson" },
     });
+  });
+
+  it("includes the immediately visible parent for the focal post on a detail route", () => {
+    const parent = createPost({ text: "Parent context" });
+    parent.querySelector("a")?.setAttribute("href", "https://x.com/parent/status/111");
+    const reply = createPost({ text: "Focal reply" });
+    reply.querySelector("a")?.setAttribute("href", "https://x.com/replier/status/222");
+    window.history.replaceState({}, "", "/replier/status/222");
+
+    expect(extractXPost(reply)).toMatchObject({
+      ok: true,
+      context: {
+        text: "Focal reply",
+        parentPost: {
+          text: "Parent context",
+          authorHandle: "@parent",
+          postUrl: "https://x.com/parent/status/111",
+        },
+      },
+    });
+  });
+
+  it("does not infer a parent for timeline posts or non-focal conversation posts", () => {
+    createPost({ text: "Earlier visible post" });
+    const selected = createPost({ text: "Selected post" });
+    window.history.replaceState({}, "", "/another/status/999");
+
+    const result = extractXPost(selected);
+    expect(result).toMatchObject({ ok: true, context: { text: "Selected post" } });
+    expect(result.ok && result.context.parentPost).toBeUndefined();
   });
 
   it("fails closed when text or the semantic action group is unavailable", () => {

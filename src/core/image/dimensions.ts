@@ -49,8 +49,17 @@ export const getExpectedImageDimensions = (
 ): ImagePixelDimensions =>
   (provider === "gemini" ? GEMINI_DIMENSIONS : OPENAI_DIMENSIONS)[size][aspectRatio];
 
-export const getOpenAIRequestDimensions = (aspectRatio: ImageAspectRatio): ImagePixelDimensions =>
-  OPENAI_REQUEST_DIMENSIONS[aspectRatio];
+export const supportsOpenAIExactDimensions = (model: string): boolean =>
+  /^gpt-image-2(?:-|$)/i.test(model.trim());
+
+export const getOpenAIRequestDimensions = (
+  model: string,
+  size: ImageSize,
+  aspectRatio: ImageAspectRatio,
+): ImagePixelDimensions =>
+  supportsOpenAIExactDimensions(model)
+    ? OPENAI_DIMENSIONS[size][aspectRatio]
+    : OPENAI_REQUEST_DIMENSIONS[aspectRatio];
 
 export const appendImageCanvasRequirement = (
   prompt: string,

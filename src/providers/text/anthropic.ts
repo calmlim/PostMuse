@@ -1,13 +1,13 @@
 import { AppError } from "../../core/errors/app-error";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
-import { fetchWithPolicy, readJsonResponse } from "../shared/http";
+import { fetchJsonWithPolicy } from "../shared/http";
 import { getTextRequestTimeout, type TextProviderAdapter } from "./types";
 
 export const anthropicAdapter: TextProviderAdapter = {
   id: "anthropic",
   async generate(request, { profile, apiKey, signal, purpose }) {
-    const response = await fetchWithPolicy(
+    const payload = await fetchJsonWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/messages"),
       {
         method: "POST",
@@ -26,8 +26,6 @@ export const anthropicAdapter: TextProviderAdapter = {
       signal,
       { timeoutMs: getTextRequestTimeout(purpose), maxRetries: 0 },
     );
-    const payload = await readJsonResponse(response);
-
     if (!isRecordValue(payload)) {
       throw new AppError("OUTPUT_INVALID", "Anthropic returned an invalid response.");
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchWithPolicy } from "./http";
+import { fetchJsonWithPolicy } from "./http";
 
 const requestInit: RequestInit = { method: "POST" };
 
@@ -8,7 +8,7 @@ describe("provider fetch policy", () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response("", { status: 401 }));
 
     await expect(
-      fetchWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
+      fetchJsonWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
         fetchImpl,
       }),
     ).rejects.toMatchObject({ code: "AUTH_INVALID" });
@@ -23,7 +23,7 @@ describe("provider fetch policy", () => {
       .mockResolvedValueOnce(new Response("ok", { status: 200 }));
 
     await expect(
-      fetchWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
+      fetchJsonWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
         fetchImpl,
       }),
     ).rejects.toMatchObject({ code: "RATE_LIMITED" });
@@ -39,7 +39,7 @@ describe("provider fetch policy", () => {
     ["network failures", vi.fn().mockRejectedValue(new TypeError("offline")), "NETWORK_ERROR"],
   ])("does not retry %s", async (_label, fetchImpl, code) => {
     await expect(
-      fetchWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
+      fetchJsonWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
         fetchImpl,
       }),
     ).rejects.toMatchObject({ code });
@@ -55,7 +55,7 @@ describe("provider fetch policy", () => {
     );
 
     await expect(
-      fetchWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
+      fetchJsonWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
         fetchImpl,
       }),
     ).rejects.toMatchObject({ code: "ENDPOINT_NOT_FOUND" });
@@ -73,7 +73,7 @@ describe("provider fetch policy", () => {
         }),
     );
 
-    const pending = fetchWithPolicy(
+    const pending = fetchJsonWithPolicy(
       "https://api.example.com/v1",
       requestInit,
       parentController.signal,
@@ -98,11 +98,74 @@ describe("provider fetch policy", () => {
     );
 
     await expect(
-      fetchWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
+      fetchJsonWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
         fetchImpl: fetchImpl as typeof fetch,
         maxRetries: 0,
         timeoutMs: 1,
       }),
     ).rejects.toMatchObject({ code: "TIMEOUT" });
+  });
+
+  it("keeps user cancellation active while the response body is being read", async () => {
+    const parentController = new AbortController();
+    const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {
+      const signal = init.signal;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            );
+          }),
+      } as Response;
+    });
+
+    const pending = fetchJsonWithPolicy(
+      "https://api.example.com/v1",
+      requestInit,
+      parentController.signal,
+      { fetchImpl: fetchImpl as typeof fetch },
+    );
+    await Promise.resolve();
+    parentController.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: "REQUEST_CANCELLED" });
+  });
+
+  it("keeps the deadline active while the response body is being read", async () => {
+    const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {
+      const signal = init.signal;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            );
+          }),
+      } as Response;
+    });
+
+    await expect(
+      fetchJsonWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
+        fetchImpl: fetchImpl as typeof fetch,
+        timeoutMs: 1,
+      }),
+    ).rejects.toMatchObject({ code: "TIMEOUT" });
+  });
+
+  it("maps an invalid JSON body to an output error", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("not-json", { status: 200 }));
+
+    await expect(
+      fetchJsonWithPolicy("https://api.example.com/v1", requestInit, new AbortController().signal, {
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({ code: "OUTPUT_INVALID" });
   });
 });

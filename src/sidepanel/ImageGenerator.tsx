@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRequestId } from "../core/contracts/messages";
 import { buildImagePrompt } from "../core/image/prompt-builder";
+import { supportsOpenAIExactDimensions } from "../core/image/dimensions";
 import type { ImageGenerationResult, ImageHistoryMetadata, ImageStyle } from "../core/image/types";
 import type { SettingsSnapshot } from "../core/settings/types";
 import type { Messages } from "../i18n";
@@ -83,6 +84,11 @@ export function ImageGenerator({
     [snapshot],
   );
   const isConfigured = Boolean(profile?.model.trim() && snapshot?.activeImageSecretStatus?.hasKey);
+  const usesLocalOpenAI2K = Boolean(
+    profile?.provider === "openai" &&
+      size === "2K" &&
+      !supportsOpenAIExactDimensions(profile.model),
+  );
 
   useEffect(() => {
     setPrompt(buildImagePrompt(sourceText, "editorial", false));
@@ -239,7 +245,11 @@ export function ImageGenerator({
           <span>{copy.imageAspectRatioLabel}</span>
           <select
             value={aspectRatio}
-            onChange={(event) => setAspectRatio(event.target.value as typeof aspectRatio)}
+            onChange={(event) => {
+              setAspectRatio(event.target.value as typeof aspectRatio);
+              setResult(undefined);
+              setError(undefined);
+            }}
             disabled={isGenerating}
           >
             <option value="1:1">1:1</option>
@@ -251,15 +261,17 @@ export function ImageGenerator({
           <span>{copy.imageSizeLabel}</span>
           <select
             value={size}
-            onChange={(event) => setSize(event.target.value as typeof size)}
+            onChange={(event) => {
+              setSize(event.target.value as typeof size);
+              setResult(undefined);
+              setError(undefined);
+            }}
             disabled={isGenerating}
           >
             <option value="1K">1K</option>
             <option value="2K">2K</option>
           </select>
-          {profile?.provider === "openai" && size === "2K" ? (
-            <small>{copy.imageOpenAI2KLocalNotice}</small>
-          ) : null}
+          {usesLocalOpenAI2K ? <small>{copy.imageOpenAI2KLocalNotice}</small> : null}
         </label>
       </div>
 
@@ -340,7 +352,9 @@ export function ImageGenerator({
               {result.pixelWidth && result.pixelHeight
                 ? ` · ${result.pixelWidth}×${result.pixelHeight}`
                 : ""}
-              {result.provider === "openai" && result.size === "2K"
+              {result.provider === "openai" &&
+              result.size === "2K" &&
+              !supportsOpenAIExactDimensions(result.model)
                 ? ` · ${copy.imageOpenAI2KLocalBadge}`
                 : ""}
             </span>

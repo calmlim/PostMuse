@@ -16,6 +16,7 @@ import type {
   GenerationResult,
   RegenerationInput,
 } from "../../core/generation/types";
+import { refreshLengthWarnings } from "../../core/generation/result-warnings";
 import { OUTPUT_LANGUAGE_OPTIONS, type OutputLanguageId } from "../../core/generation/languages";
 import { getInlineMessages, type InlineMessages } from "../../i18n/inline";
 import { sendInlineRequest } from "../inline-client";
@@ -262,6 +263,7 @@ export function InlinePanel({
       } else {
         return;
       }
+      nextResult = refreshLengthWarnings(nextResult, lastGenerationInput);
       setResult(nextResult);
       if (lastHistoryId) {
         try {
@@ -340,14 +342,20 @@ export function InlinePanel({
 
   const updateResultText = (index: number, text: string) => {
     if (result?.format === "candidates") {
-      setResult({
+      const nextResult: GenerationResult = {
         ...result,
         candidates: result.candidates.map((item, itemIndex) =>
           itemIndex === index ? { ...item, text } : item,
         ),
-      });
+      };
+      setResult(
+        lastGenerationInput ? refreshLengthWarnings(nextResult, lastGenerationInput) : nextResult,
+      );
     } else if (result?.format === "raw") {
-      setResult({ ...result, rawText: text });
+      const nextResult: GenerationResult = { ...result, rawText: text };
+      setResult(
+        lastGenerationInput ? refreshLengthWarnings(nextResult, lastGenerationInput) : nextResult,
+      );
     }
   };
 

@@ -64,6 +64,25 @@ describe("image provider adapters", () => {
     });
   });
 
+  it("requests the exact target canvas from GPT Image 2", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ b64_json: "b3BlbmFpLWltYWdl" }] }), {
+        status: 200,
+      }),
+    );
+
+    await openAIImageAdapter.generate(input, {
+      profile: { ...profileFor("openai"), model: "gpt-image-2" },
+      apiKey: "test-image-secret",
+      signal: new AbortController().signal,
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
+      model: "gpt-image-2",
+      size: "2048x1152",
+    });
+  });
+
   it("maps Gemini Interactions image output and capability fields", async () => {
     fetchMock.mockResolvedValue(
       new Response(

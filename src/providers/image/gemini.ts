@@ -6,7 +6,7 @@ import {
 } from "../../core/image/dimensions";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
-import { fetchWithPolicy, readJsonResponse } from "../shared/http";
+import { fetchJsonWithPolicy } from "../shared/http";
 import type { ImageProviderAdapter } from "./types";
 
 const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -43,7 +43,7 @@ export const geminiImageAdapter: ImageProviderAdapter = {
   id: "gemini",
   async generate(input, { profile, apiKey, signal }) {
     const dimensions = getExpectedImageDimensions("gemini", input.size, input.aspectRatio);
-    const response = await fetchWithPolicy(
+    const payload = await fetchJsonWithPolicy(
       appendApiPath(profile.baseUrl, "/v1beta/interactions"),
       {
         method: "POST",
@@ -66,7 +66,6 @@ export const geminiImageAdapter: ImageProviderAdapter = {
       signal,
       { timeoutMs: 180_000, maxRetries: 0 },
     );
-    const payload = await readJsonResponse(response);
     if (!isRecordValue(payload)) {
       throw new AppError("OUTPUT_INVALID", "Gemini returned an invalid image response.");
     }

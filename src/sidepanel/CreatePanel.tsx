@@ -20,6 +20,7 @@ import type {
 } from "../core/generation/types";
 import { getCustomLengthBounds } from "../core/generation/types";
 import { getRecommendedMaxOutputTokens } from "../core/generation/length";
+import { refreshLengthWarnings } from "../core/generation/result-warnings";
 import {
   isOutputLanguageId,
   OUTPUT_LANGUAGE_OPTIONS,
@@ -523,7 +524,7 @@ export function CreatePanel({
       if (activeRequestId.current !== requestId) {
         return;
       }
-      const nextResult: GenerationResult =
+      const replacedResult: GenerationResult =
         target.kind === "candidate" && result.format === "candidates"
           ? {
               ...result,
@@ -545,7 +546,10 @@ export function CreatePanel({
                     : thread,
                 ),
               }
-            : result;
+            : target.kind === "candidate" && result.format === "raw"
+              ? { ...result, rawText: regenerated.text }
+              : result;
+      const nextResult = refreshLengthWarnings(replacedResult, lastGenerationInput);
       setResult(nextResult);
       if (lastHistoryId) {
         try {

@@ -73,6 +73,9 @@ describe("ImageGenerator", () => {
       expect.objectContaining({ type: "image", provider: "openai" }),
     );
 
+    fireEvent.change(screen.getByLabelText("Aspect ratio"), { target: { value: "16:9" } });
+    expect(screen.queryByRole("img", { name: "Image ready" })).not.toBeInTheDocument();
+
     unmount();
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:postmuse-image"));
   });

@@ -63,12 +63,12 @@ interface FetchPolicyOptions {
   fetchImpl?: typeof fetch;
 }
 
-export const fetchWithPolicy = async (
+export const fetchJsonWithPolicy = async (
   url: string,
   init: RequestInit,
   parentSignal: AbortSignal,
   options: FetchPolicyOptions = {},
-): Promise<Response> => {
+): Promise<unknown> => {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = options.maxRetries ?? DEFAULT_RETRIES;
@@ -104,7 +104,17 @@ export const fetchWithPolicy = async (
         throw mapHttpError(response);
       }
 
-      return response;
+      try {
+        return await response.json();
+      } catch {
+        if (parentSignal.aborted) {
+          throw new AppError("REQUEST_CANCELLED", "Generation was cancelled.");
+        }
+        if (timedOut) {
+          throw new AppError("TIMEOUT", "The Provider request timed out.");
+        }
+        throw new AppError("OUTPUT_INVALID", "The Provider returned an invalid response.");
+      }
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -131,12 +141,4 @@ export const fetchWithPolicy = async (
   }
 
   throw new AppError("NETWORK_ERROR", "The Provider could not be reached.");
-};
-
-export const readJsonResponse = async (response: Response): Promise<unknown> => {
-  try {
-    return await response.json();
-  } catch {
-    throw new AppError("OUTPUT_INVALID", "The Provider returned an invalid response.");
-  }
 };

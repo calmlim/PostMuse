@@ -6,15 +6,19 @@ import {
 } from "../../core/image/dimensions";
 import { isRecordValue } from "../../core/settings/validation";
 import { appendApiPath } from "../shared/endpoints";
-import { fetchWithPolicy, readJsonResponse } from "../shared/http";
+import { fetchJsonWithPolicy } from "../shared/http";
 import type { ImageProviderAdapter } from "./types";
 
 export const openAIImageAdapter: ImageProviderAdapter = {
   id: "openai",
   async generate(input, { profile, apiKey, signal }) {
     const dimensions = getExpectedImageDimensions("openai", input.size, input.aspectRatio);
-    const requestDimensions = getOpenAIRequestDimensions(input.aspectRatio);
-    const response = await fetchWithPolicy(
+    const requestDimensions = getOpenAIRequestDimensions(
+      profile.model,
+      input.size,
+      input.aspectRatio,
+    );
+    const payload = await fetchJsonWithPolicy(
       appendApiPath(profile.baseUrl, "/v1/images/generations"),
       {
         method: "POST",
@@ -33,7 +37,6 @@ export const openAIImageAdapter: ImageProviderAdapter = {
       signal,
       { timeoutMs: 180_000, maxRetries: 0 },
     );
-    const payload = await readJsonResponse(response);
     const firstImage =
       isRecordValue(payload) && Array.isArray(payload.data) ? payload.data[0] : null;
     const base64Data = isRecordValue(firstImage) ? firstImage.b64_json : undefined;

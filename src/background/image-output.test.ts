@@ -111,4 +111,10 @@ describe("image output conformance", () => {
       code: "OUTPUT_INVALID",
     });
   });
+
+  it("maps invalid base64 image data to an output error", async () => {
+    await expect(
+      conformImageOutput({ ...result(1536, 864), base64Data: "%%%not-base64%%%" }, input),
+    ).rejects.toMatchObject({ code: "OUTPUT_INVALID" });
+  });
 });

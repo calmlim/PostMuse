@@ -1,5 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
+const checkOnly = process.argv.includes("--check");
+
 const locales = ["en", "zh-CN", "zh-TW", "ja", "ko", "vi", "es", "pt-BR", "fr", "de"];
 const keys = [
   "appName",
@@ -43,7 +45,9 @@ const keys = [
   "styleThoughtLeadership",
 ];
 
-await mkdir("src/i18n/inline", { recursive: true });
+if (!checkOnly) {
+  await mkdir("src/i18n/inline", { recursive: true });
+}
 for (const locale of locales) {
   const full = JSON.parse(await readFile(`src/i18n/${locale}.json`, "utf8"));
   const missing = keys.filter((key) => typeof full[key] !== "string");
@@ -51,5 +55,14 @@ for (const locale of locales) {
     throw new Error(`${locale} is missing inline keys: ${missing.join(", ")}`);
   }
   const catalog = Object.fromEntries(keys.map((key) => [key, full[key]]));
-  await writeFile(`src/i18n/inline/${locale}.json`, `${JSON.stringify(catalog, null, 2)}\n`);
+  const outputPath = `src/i18n/inline/${locale}.json`;
+  const expected = `${JSON.stringify(catalog, null, 2)}\n`;
+  if (checkOnly) {
+    const current = await readFile(outputPath, "utf8").catch(() => "");
+    if (current !== expected) {
+      throw new Error(`${outputPath} is stale. Run npm run i18n:inline.`);
+    }
+  } else {
+    await writeFile(outputPath, expected);
+  }
 }
