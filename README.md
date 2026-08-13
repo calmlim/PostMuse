@@ -28,7 +28,7 @@ a companion image without giving PostMuse access to an account or publishing aut
 PostMuse is not currently distributed through the Chrome Web Store.
 
 1. Open [GitHub Releases](https://github.com/calmlim/PostMuse/releases) and select the newest beta.
-2. Download `postmuse-0.1.0-chrome.zip` and verify its checksum if desired.
+2. Download `postmuse-x.x.x-chrome.zip` and verify its checksum if desired.
 3. Extract the ZIP to a permanent folder. Do not delete that folder after installation.
 4. Open `chrome://extensions` in Chrome.
 5. Enable **Developer mode**.
