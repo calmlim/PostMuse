@@ -7,7 +7,7 @@ PostMuse is a local-first, bring-your-own-key Chrome extension for drafting bett
 Rewrite a visible post, prepare a reply or quote, build a thread or long post, and optionally create
 a companion image without giving PostMuse access to an account or publishing automatically.
 
-> PostMuse is currently beta software. Install it manually only if you are comfortable using Chrome
+> PostMuse is currently early-stage software. Install it manually only if you are comfortable using Chrome
 > Developer mode and configuring your own AI Provider API key.
 
 ## Highlights
@@ -23,11 +23,11 @@ a companion image without giving PostMuse access to an account or publishing aut
   Spanish, Brazilian Portuguese, French, or German.
 - Keep the workflow manual: PostMuse never fills X's composer or clicks a publish control.
 
-## Install the beta release
+## Install the latest release
 
 PostMuse is not currently distributed through the Chrome Web Store.
 
-1. Open [GitHub Releases](https://github.com/calmlim/PostMuse/releases) and select the newest beta.
+1. Open [GitHub Releases](https://github.com/calmlim/PostMuse/releases) and select the latest release.
 2. Download `postmuse-x.x.x-chrome.zip` and verify its checksum if desired.
 3. Extract the ZIP to a permanent folder. Do not delete that folder after installation.
 4. Open `chrome://extensions` in Chrome.
@@ -46,7 +46,7 @@ for manually loaded software.
 3. Open `chrome://extensions` and click **Reload** on PostMuse.
 
 Keeping the same installation path helps Chrome retain the same unpacked extension identity and
-local data. Back up anything important before replacing a beta build.
+local data. Back up anything important before replacing a build.
 
 ## Configure a Provider
 

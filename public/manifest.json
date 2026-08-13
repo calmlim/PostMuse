@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PostMuse",
   "short_name": "PostMuse",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI writing companion for preparing content for X.",
   "minimum_chrome_version": "114",
   "permissions": ["sidePanel", "storage"],
