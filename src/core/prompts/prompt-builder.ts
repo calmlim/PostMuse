@@ -55,13 +55,14 @@ export const getLengthInstruction = (input: GenerationInput): string => {
     return lengthInstructions[input.contentType][input.length];
   }
   const target = input.customLength;
+  const maximum = target !== undefined && target > 280 ? 25_000 : 280;
   if (input.contentType === "thread") {
-    return `Aim for approximately ${target} Unicode characters per post; never exceed 280 characters in any post.`;
+    return `Aim for approximately ${target} Unicode characters per post; never exceed ${maximum.toLocaleString("en-US")} characters in any post.`;
   }
   if (input.contentType === "long-post") {
     return `Aim for approximately ${target} Unicode characters across readable paragraphs; never exceed 25,000 characters.`;
   }
-  return `Aim for approximately ${target} Unicode characters; never exceed 280 characters.`;
+  return `Aim for approximately ${target} Unicode characters; never exceed ${maximum.toLocaleString("en-US")} characters.`;
 };
 
 const getOutputContract = (input: GenerationInput): string =>

@@ -11,6 +11,8 @@ import { isRecordValue } from "../settings/validation";
 
 export const HISTORY_SCHEMA_VERSION = 1;
 export const HISTORY_LIMIT = 100;
+export const MAX_HISTORY_GENERATED_TEXT_LENGTH = 25_000;
+export const MAX_HISTORY_RAW_TEXT_LENGTH = 100_000;
 
 export interface HistoryRecordV1 {
   schemaVersion: 1;
@@ -31,7 +33,8 @@ const isGeneratedText = (value: unknown): boolean =>
   isRecordValue(value) &&
   typeof value.id === "string" &&
   value.id.length > 0 &&
-  typeof value.text === "string";
+  typeof value.text === "string" &&
+  value.text.length <= MAX_HISTORY_GENERATED_TEXT_LENGTH;
 
 export const isGenerationResult = (value: unknown): value is GenerationResult => {
   if (
@@ -74,7 +77,11 @@ export const isGenerationResult = (value: unknown): value is GenerationResult =>
       )
     );
   }
-  return value.format === "raw" && typeof value.rawText === "string";
+  return (
+    value.format === "raw" &&
+    typeof value.rawText === "string" &&
+    value.rawText.length <= MAX_HISTORY_RAW_TEXT_LENGTH
+  );
 };
 
 const isIsoDate = (value: unknown): value is string =>

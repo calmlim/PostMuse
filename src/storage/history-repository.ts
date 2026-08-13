@@ -10,6 +10,10 @@ import {
 export const HISTORY_DATABASE_NAME = "postmuse";
 export const HISTORY_DATABASE_VERSION = 1;
 export const HISTORY_STORE_NAME = "history";
+export const HISTORY_BYTE_LIMIT = 10 * 1024 * 1024;
+
+const getRecordByteLength = (record: HistoryRecordV1): number =>
+  new TextEncoder().encode(JSON.stringify(record)).byteLength;
 
 const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> =>
   new Promise((resolve, reject) => {
@@ -84,9 +88,20 @@ export const saveHistoryRecord = async (
     const transaction = database.transaction(HISTORY_STORE_NAME, "readwrite");
     const store = transaction.objectStore(HISTORY_STORE_NAME);
     await requestToPromise(store.put(record));
-    const orderedKeys = await requestToPromise(store.index("updatedAt").getAllKeys());
-    for (const key of orderedKeys.slice(0, Math.max(0, orderedKeys.length - HISTORY_LIMIT))) {
-      store.delete(key);
+    const orderedRecords = (await requestToPromise(
+      store.index("updatedAt").getAll(),
+    )) as HistoryRecordV1[];
+    let retainedBytes = 0;
+    let retainedCount = 0;
+    for (let index = orderedRecords.length - 1; index >= 0; index -= 1) {
+      const current = orderedRecords[index];
+      const currentBytes = getRecordByteLength(current);
+      if (retainedCount >= HISTORY_LIMIT || retainedBytes + currentBytes > HISTORY_BYTE_LIMIT) {
+        store.delete(current.id);
+      } else {
+        retainedBytes += currentBytes;
+        retainedCount += 1;
+      }
     }
     await transactionToPromise(transaction);
     return record;

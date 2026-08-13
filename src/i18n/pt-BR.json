@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "acima do alvo",
   "tokenBudgetWarning": "O conteúdo pode ser cortado: o limite atual é {current} tokens; recomenda-se cerca de {recommended}. Ainda é possível gerar.",
   "longPostNotice": "A disponibilidade premium e a duração final são determinadas pela sua conta X. Esta é uma postagem longa em texto simples, não um artigo X.",
+  "xWeightedCountLabel": "Contagem do X: {count}",
   "generateImage": "Gerar imagem",
   "imageGeneratorTitle": "Crie uma imagem complementar",
   "standaloneImageTitle": "Criar uma imagem",

@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "zu lang",
   "tokenBudgetWarning": "Der Inhalt kann gekürzt werden: aktuelles Limit {current} Tokens, empfohlen sind etwa {recommended}. Die Generierung bleibt möglich.",
   "longPostNotice": "Premium-Verfügbarkeit und endgültige Länge werden von Ihrem X-Konto bestimmt. Dies ist ein langer Klartext-Beitrag, kein X-Artikel.",
+  "xWeightedCountLabel": "X-Zeichen: {count}",
   "generateImage": "Bild generieren",
   "imageGeneratorTitle": "Erstellen Sie ein Begleitbild",
   "standaloneImageTitle": "Bild erstellen",

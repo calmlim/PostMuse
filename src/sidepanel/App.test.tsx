@@ -119,10 +119,27 @@ describe("Side Panel App", () => {
 
     fireEvent.change(length, { target: { value: "custom" } });
     const standardTarget = screen.getByLabelText("Target characters");
-    expect(standardTarget).toHaveAttribute("max", "280");
+    expect(standardTarget).toHaveAttribute("max", "25000");
+    fireEvent.change(standardTarget, { target: { value: "1000" } });
+    expect(standardTarget).toHaveValue(1000);
 
     fireEvent.click(screen.getByRole("button", { name: "Premium long post" }));
     expect(await screen.findByLabelText("Target characters")).toHaveAttribute("max", "25000");
+  });
+
+  it("warns about X long-post access before a paid generation", async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Length"), { target: { value: "custom" } });
+    fireEvent.change(await screen.findByLabelText("Target characters"), {
+      target: { value: "281" },
+    });
+
+    expect(
+      screen.getByText(
+        "Premium availability and final length are determined by your X account. This is a plain-text long post, not an X Article.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("offers common output languages and keeps custom language available", () => {

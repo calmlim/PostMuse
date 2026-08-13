@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "trop long",
   "tokenBudgetWarning": "Le contenu peut être tronqué : limite actuelle {current} tokens, environ {recommended} recommandés. La génération reste possible.",
   "longPostNotice": "La disponibilité premium et la durée finale sont déterminées par votre compte X. Il s'agit d'un long message en texte brut, pas d'un article X.",
+  "xWeightedCountLabel": "Décompte X : {count}",
   "generateImage": "Générer une image",
   "imageGeneratorTitle": "Créer une image compagnon",
   "standaloneImageTitle": "Créer une image",

@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "más largo",
   "tokenBudgetWarning": "El contenido puede truncarse: el límite es {current} tokens y se recomiendan unos {recommended}. Aún puedes generar.",
   "longPostNotice": "La disponibilidad premium y la duración final están determinadas por su cuenta X. Esta es una publicación larga en texto plano, no un artículo X.",
+  "xWeightedCountLabel": "Conteo de X: {count}",
   "generateImage": "Generar imagen",
   "imageGeneratorTitle": "Crear una imagen complementaria",
   "standaloneImageTitle": "Crear una imagen",

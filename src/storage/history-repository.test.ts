@@ -111,4 +111,50 @@ describe("history repository", () => {
     expect(stored?.media).toMatchObject({ provider: "openai", size: "1K" });
     expect(JSON.stringify(stored)).not.toContain("base64Data");
   });
+
+  it("rejects generated history items beyond the X long-post boundary", async () => {
+    await expect(
+      saveHistoryRecord(
+        createGenerationInputFixture({ candidateCount: 1 }),
+        resultFixture("x".repeat(25_001)),
+        { recipeVersion: 1, styleTemplateVersion: 1 },
+      ),
+    ).rejects.toThrow("History record failed validation");
+  });
+
+  it("evicts oldest large records when the history byte budget is reached", async () => {
+    for (let index = 0; index < 18; index += 1) {
+      await saveHistoryRecord(
+        createGenerationInputFixture({
+          source: { kind: "idea", text: `${index}-${"s".repeat(99_995)}` },
+          contentType: "thread",
+          candidateCount: 1,
+          threadCount: 20,
+        }),
+        {
+          format: "thread",
+          contentType: "thread",
+          threads: [
+            {
+              id: `thread-${index}`,
+              posts: Array.from({ length: 20 }, (_, postIndex) => ({
+                id: `post-${postIndex}`,
+                text: "x".repeat(25_000),
+              })),
+            },
+          ],
+          warnings: [],
+          provider: "xai",
+          model: "grok-test",
+          softCharacterLimit: 25_000,
+        },
+        { recipeVersion: 1, styleTemplateVersion: 1, now: new Date(index * 1_000) },
+      );
+    }
+
+    const records = await listHistoryRecords();
+    expect(records.length).toBeLessThan(18);
+    expect(records[0].input.source.text).toMatch(/^17-/);
+    expect(records.at(-1)?.input.source.text).not.toMatch(/^0-/);
+  });
 });

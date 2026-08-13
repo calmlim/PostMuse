@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "목표보다 김",
   "tokenBudgetWarning": "내용이 잘릴 수 있습니다. 현재 한도는 {current} tokens이며 선택한 길이와 수량에는 약 {recommended}를 권장합니다. 생성은 계속할 수 있습니다.",
   "longPostNotice": "프리미엄 가용성과 최종 기간은 X 계정에 따라 결정됩니다. 이것은 X 기사가 아닌 일반 텍스트의 긴 게시물입니다.",
+  "xWeightedCountLabel": "X 글자 수: {count}",
   "generateImage": "이미지 생성",
   "imageGeneratorTitle": "컴패니언 이미지 만들기",
   "standaloneImageTitle": "이미지 만들기",

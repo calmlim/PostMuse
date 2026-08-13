@@ -91,6 +91,32 @@ describe("generation input validation", () => {
         target: { kind: "candidate", index: 0, currentTexts: ["x".repeat(25_001)] },
       }),
     ).toBe(false);
+    expect(
+      isRegenerationInput({
+        input: createGenerationInputFixture({
+          contentType: "reply",
+          length: "custom",
+          customLength: 25_000,
+        }),
+        target: { kind: "candidate", index: 0, currentTexts: ["x".repeat(25_000)] },
+      }),
+    ).toBe(true);
+    expect(
+      isRegenerationInput({
+        input: createGenerationInputFixture({
+          contentType: "thread",
+          candidateCount: 1,
+          threadCount: 2,
+          length: "custom",
+          customLength: 25_000,
+        }),
+        target: {
+          kind: "thread-post",
+          index: 1,
+          currentTexts: ["Hook", "x".repeat(25_000)],
+        },
+      }),
+    ).toBe(true);
   });
 
   it("requires a fixed language value and one result for long formats", () => {
@@ -117,6 +143,12 @@ describe("generation input validation", () => {
     ).toBe(true);
     expect(
       isGenerationInput(createGenerationInputFixture({ length: "custom", customLength: 281 })),
+    ).toBe(true);
+    expect(
+      isGenerationInput(createGenerationInputFixture({ length: "custom", customLength: 25_000 })),
+    ).toBe(true);
+    expect(
+      isGenerationInput(createGenerationInputFixture({ length: "custom", customLength: 25_001 })),
     ).toBe(false);
     expect(
       isGenerationInput(

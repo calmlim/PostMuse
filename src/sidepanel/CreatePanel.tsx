@@ -376,6 +376,8 @@ export function CreatePanel({
   const hasTokenBudgetWarning = Boolean(
     profile && profile.maxOutputTokens < recommendedMaxOutputTokens,
   );
+  const requiresLongPostAccess =
+    form.contentType === "long-post" || (form.length === "custom" && form.customLength > 280);
 
   const performFullGeneration = async (generationInput: GenerationInput) => {
     if (!profile) {
@@ -891,6 +893,13 @@ export function CreatePanel({
                   />
                 </label>
               ) : null}
+            </div>
+          ) : null}
+
+          {requiresLongPostAccess ? (
+            <div className="feedback" data-kind="warning" role="status">
+              <WarningCircle size={18} weight="fill" aria-hidden="true" />
+              <span>{copy.longPostNotice}</span>
             </div>
           ) : null}
 

@@ -51,7 +51,11 @@ export const parseGenerationOutput = (
   metadata: ParseMetadata,
 ): GenerationResult => {
   const parsed = parseJsonWithDeterministicRepair(rawText);
-  const softCharacterLimit = input.contentType === "long-post" ? undefined : 280;
+  const softCharacterLimit =
+    input.contentType === "long-post" ||
+    (input.length === "custom" && (input.customLength ?? 0) > 280)
+      ? 25_000
+      : 280;
   const contentType = input.contentType;
 
   if (input.contentType === "thread" && isRecordValue(parsed) && Array.isArray(parsed.threads)) {

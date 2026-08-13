@@ -123,9 +123,8 @@ export const isRegenerationInput = (value: unknown): value is RegenerationInput 
     currentTexts.length <= 20 &&
     index >= 0 &&
     index < currentTexts.length &&
-    currentTexts.every((text) => {
-      const maximum = input.contentType === "long-post" ? 25_000 : 20_000;
-      return typeof text === "string" && text.trim().length > 0 && text.length <= maximum;
-    })
+    currentTexts.every(
+      (text) => typeof text === "string" && text.trim().length > 0 && text.length <= 25_000,
+    )
   );
 };

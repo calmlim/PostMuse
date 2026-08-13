@@ -1,4 +1,5 @@
 import type { ContentType, GenerationInput, OutputLength } from "./types";
+import twitterText from "twitter-text";
 
 export type LengthStatus = "below" | "within" | "above";
 
@@ -37,6 +38,9 @@ const PRESET_BOUNDS: Record<ContentType, Record<Exclude<OutputLength, "custom">,
 
 export const countUnicodeCharacters = (value: string): number => Array.from(value).length;
 
+export const countXWeightedCharacters = (value: string): number =>
+  twitterText.getTweetLength(value.normalize("NFC"));
+
 export const getRequestedLengthBounds = (input: GenerationInput): LengthBounds => {
   if (input.length !== "custom") {
     return PRESET_BOUNDS[input.contentType][input.length];
@@ -44,7 +48,7 @@ export const getRequestedLengthBounds = (input: GenerationInput): LengthBounds =
   const target = input.customLength ?? 1;
   return {
     min: Math.max(1, Math.floor((target * 90) / 100)),
-    max: Math.ceil((target * 110) / 100),
+    max: Math.min(25_000, Math.ceil((target * 110) / 100)),
   };
 };
 

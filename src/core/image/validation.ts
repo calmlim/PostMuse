@@ -2,7 +2,8 @@ import { isRecordValue } from "../settings/validation";
 import { IMAGE_ASPECT_RATIOS, IMAGE_SIZES, IMAGE_STYLES, type ImageGenerationInput } from "./types";
 
 export const MAX_IMAGE_SOURCE_LENGTH = 100_000;
-export const MAX_IMAGE_PROMPT_LENGTH = 20_000;
+export const MAX_IMAGE_DESCRIPTION_LENGTH = 20_000;
+export const MAX_IMAGE_PROMPT_LENGTH = 32_000;
 
 export const isImageGenerationInput = (value: unknown): value is ImageGenerationInput =>
   isRecordValue(value) &&

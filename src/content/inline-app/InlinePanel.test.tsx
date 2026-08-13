@@ -117,9 +117,11 @@ describe("InlinePanel", () => {
     expect(
       screen.getAllByRole("button", { name: "Copy" })[0].closest(".result-heading"),
     ).not.toBeNull();
-    expect(screen.getByText("Draft copied.")).toBeVisible();
-    expect(runtimeSendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "inline.history.sync", historyId: "history-inline-1" }),
+    expect(await screen.findByText("Draft copied.")).toBeVisible();
+    await waitFor(() =>
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "inline.history.sync", historyId: "history-inline-1" }),
+      ),
     );
   });
 

@@ -56,7 +56,6 @@ describe("prompt builder", () => {
         candidateCount: 1,
       }),
     );
-
     expect(post.system).toContain("200–280 Unicode characters");
     expect(thread.system).toContain("100–180 Unicode characters per post");
     expect(longPost.system).toContain("300–600 Unicode characters across 2–4 readable paragraphs");
@@ -74,11 +73,31 @@ describe("prompt builder", () => {
         customLength: 5_000,
       }),
     );
+    const premiumReply = buildTextGenerationRequest(
+      createGenerationInputFixture({
+        contentType: "reply",
+        length: "custom",
+        customLength: 1_000,
+      }),
+    );
+    const premiumThread = buildTextGenerationRequest(
+      createGenerationInputFixture({
+        contentType: "thread",
+        candidateCount: 1,
+        threadCount: 3,
+        length: "custom",
+        customLength: 1_000,
+      }),
+    );
 
     expect(post.system).toContain("approximately 240 Unicode characters");
     expect(post.system).toContain("never exceed 280");
     expect(longPost.system).toContain("approximately 5000 Unicode characters");
     expect(longPost.system).toContain("never exceed 25,000");
+    expect(premiumReply.system).toContain("approximately 1000 Unicode characters");
+    expect(premiumReply.system).toContain("never exceed 25,000");
+    expect(premiumThread.system).toContain("approximately 1000 Unicode characters per post");
+    expect(premiumThread.system).toContain("never exceed 25,000");
   });
 
   it("adds only a non-empty saved writing profile", () => {

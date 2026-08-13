@@ -53,7 +53,7 @@ export interface GenerationInput {
 export const getCustomLengthBounds = (contentType: ContentType) =>
   contentType === "long-post"
     ? { min: 100, max: 25_000, defaultValue: 2_000 }
-    : { min: 1, max: 280, defaultValue: 180 };
+    : { min: 1, max: 25_000, defaultValue: 180 };
 
 export interface GeneratedText {
   id: string;

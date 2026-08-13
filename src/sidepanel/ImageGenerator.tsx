@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRequestId } from "../core/contracts/messages";
 import { buildImagePrompt, buildStandaloneImagePrompt } from "../core/image/prompt-builder";
+import { MAX_IMAGE_DESCRIPTION_LENGTH, MAX_IMAGE_PROMPT_LENGTH } from "../core/image/validation";
 import { supportsOpenAIExactDimensions } from "../core/image/dimensions";
 import type { ImageGenerationResult, ImageHistoryMetadata, ImageStyle } from "../core/image/types";
 import type { SettingsSnapshot } from "../core/settings/types";
@@ -315,7 +316,7 @@ export function ImageGenerator({
             setError(undefined);
           }}
           rows={9}
-          maxLength={20_000}
+          maxLength={isStandalone ? MAX_IMAGE_DESCRIPTION_LENGTH : MAX_IMAGE_PROMPT_LENGTH}
           disabled={isGenerating}
         />
         <small>{isStandalone ? copy.imageDescriptionHint : copy.imagePromptHint}</small>

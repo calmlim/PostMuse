@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "偏長",
   "tokenBudgetWarning": "內容可能被截斷：目前 Profile 上限為 {current} tokens，依所選長度和數量建議約 {recommended}。仍可繼續生成。",
   "longPostNotice": "能否發佈及最終長度由你的 X 帳號權限決定。這是純文字長文，不是 X Article。",
+  "xWeightedCountLabel": "X 計數：{count}",
   "generateImage": "產生配圖",
   "imageGeneratorTitle": "創作配套圖片",
   "standaloneImageTitle": "創作圖片",

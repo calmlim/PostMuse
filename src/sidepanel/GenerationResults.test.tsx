@@ -57,6 +57,61 @@ describe("GenerationResults", () => {
     expect(onCopied).toHaveBeenCalledWith(result);
   });
 
+  it("uses the result's longer-post limit for a premium-length thread", () => {
+    render(
+      <GenerationResults
+        copy={getMessages("en")}
+        result={{
+          format: "thread",
+          contentType: "thread",
+          threads: [{ id: "thread-1", posts: [{ id: "post-1", text: "Long thread post" }] }],
+          warnings: [],
+          provider: "xai",
+          model: "grok-test",
+          softCharacterLimit: 25_000,
+        }}
+        input={{
+          source: { kind: "draft", text: "Source" },
+          contentType: "thread",
+          language: { mode: "follow-source" },
+          styleId: "professional",
+          length: "custom",
+          customLength: 1_000,
+          candidateCount: 1,
+          threadCount: 2,
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/16 \/ 25000 · X count: 16/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Premium availability and final length are determined by your X account. This is a plain-text long post, not an X Article.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows X weighted count separately from the writing target count", () => {
+    render(
+      <GenerationResults
+        copy={getMessages("en")}
+        result={{
+          format: "candidates",
+          contentType: "post",
+          candidates: [{ id: "candidate-1", text: "中文" }],
+          warnings: [],
+          provider: "xai",
+          model: "grok-test",
+          softCharacterLimit: 280,
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/2 \/ 280 · X count: 4/)).toBeInTheDocument();
+  });
+
   it("renders unsafe Provider strings only as editable text", () => {
     render(
       <GenerationResults

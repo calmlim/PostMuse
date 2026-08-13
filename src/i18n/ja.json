@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "目標より長い",
   "tokenBudgetWarning": "切り詰められる可能性があります。現在は {current} tokens、選択内容には約 {recommended} を推奨します。生成は続行できます。",
   "longPostNotice": "プレミアムの利用可能性と最終的な長さは、X アカウントによって決まります。これはプレーンテキストの長い投稿であり、X 記事ではありません。",
+  "xWeightedCountLabel": "X カウント：{count}",
   "generateImage": "画像の生成",
   "imageGeneratorTitle": "コンパニオンイメージを作成する",
   "standaloneImageTitle": "画像を作成",

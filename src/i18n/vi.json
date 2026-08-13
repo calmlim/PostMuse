@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "dài hơn mục tiêu",
   "tokenBudgetWarning": "Nội dung có thể bị cắt: giới hạn hiện tại là {current} tokens; nên dùng khoảng {recommended}. Bạn vẫn có thể tạo.",
   "longPostNotice": "Tính khả dụng của phí bảo hiểm và thời lượng cuối cùng được xác định bởi tài khoản X của bạn. Đây là một bài viết dài có văn bản đơn giản, không phải một bài viết X.",
+  "xWeightedCountLabel": "Số ký tự X: {count}",
   "generateImage": "Tạo hình ảnh",
   "imageGeneratorTitle": "Tạo hình ảnh đồng hành",
   "standaloneImageTitle": "Tạo hình ảnh",

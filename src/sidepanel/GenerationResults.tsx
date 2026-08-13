@@ -8,7 +8,11 @@ import {
 } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { GenerationInput } from "../core/generation/types";
-import { countUnicodeCharacters, getLengthStatus } from "../core/generation/length";
+import {
+  countUnicodeCharacters,
+  countXWeightedCharacters,
+  getLengthStatus,
+} from "../core/generation/length";
 import { refreshLengthWarnings } from "../core/generation/result-warnings";
 import type { ImageHistoryMetadata } from "../core/image/types";
 import type { SettingsSnapshot } from "../core/settings/types";
@@ -151,7 +155,8 @@ export function GenerationResults({
         </div>
       ) : null}
 
-      {result.contentType === "long-post" ? (
+      {result.contentType === "long-post" ||
+      (input?.length === "custom" && (input.customLength ?? 0) > 280) ? (
         <p className="premium-notice">{copy.longPostNotice}</p>
       ) : null}
 
@@ -159,6 +164,7 @@ export function GenerationResults({
         <div className="result-list">
           {result.candidates.map((candidate, index) => {
             const characterCount = countUnicodeCharacters(candidate.text);
+            const xWeightedCount = countXWeightedCharacters(candidate.text);
             const statusLabel = getStatusLabel(candidate.text);
             return (
               <article className="result-card" key={candidate.id}>
@@ -167,12 +173,13 @@ export function GenerationResults({
                   <span
                     data-over={
                       result.softCharacterLimit !== undefined &&
-                      characterCount > result.softCharacterLimit
+                      xWeightedCount > result.softCharacterLimit
                     }
                   >
                     {result.softCharacterLimit
                       ? `${characterCount} / ${result.softCharacterLimit}`
                       : characterCount}
+                    {` · ${copy.xWeightedCountLabel.replace("{count}", xWeightedCount.toLocaleString())}`}
                     {statusLabel ? ` · ${statusLabel}` : ""}
                   </span>
                 </div>
@@ -212,6 +219,7 @@ export function GenerationResults({
         <div className="thread-result">
           {result.threads[0]?.posts.map((post, index) => {
             const characterCount = countUnicodeCharacters(post.text);
+            const xWeightedCount = countXWeightedCharacters(post.text);
             const statusLabel = getStatusLabel(post.text);
             return (
               <article className="result-card thread-card" key={post.id}>
@@ -221,8 +229,17 @@ export function GenerationResults({
                       .replace("{number}", String(index + 1))
                       .replace("{total}", String(result.threads[0].posts.length))}
                   </strong>
-                  <span data-over={characterCount > 280}>
-                    {characterCount} / 280{statusLabel ? ` · ${statusLabel}` : ""}
+                  <span
+                    data-over={
+                      result.softCharacterLimit !== undefined &&
+                      xWeightedCount > result.softCharacterLimit
+                    }
+                  >
+                    {result.softCharacterLimit
+                      ? `${characterCount} / ${result.softCharacterLimit}`
+                      : characterCount}
+                    {` · ${copy.xWeightedCountLabel.replace("{count}", xWeightedCount.toLocaleString())}`}
+                    {statusLabel ? ` · ${statusLabel}` : ""}
                   </span>
                 </div>
                 <textarea

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildImagePrompt, buildStandaloneImagePrompt } from "./prompt-builder";
-import { isImageGenerationInput } from "./validation";
+import { isImageGenerationInput, MAX_IMAGE_PROMPT_LENGTH } from "./validation";
 
 describe("image prompt builder", () => {
   it("keeps source text inside an untrusted reference boundary", () => {
@@ -48,5 +48,24 @@ describe("image prompt builder", () => {
     expect(prompt).toContain("<IMAGE_DESCRIPTION>");
     expect(prompt).toContain("A red paper boat crossing a quiet blue lake");
     expect(prompt).not.toContain("<SOURCE_POST>");
+  });
+
+  it("bounds wrapped long-post and standalone prompts without rejecting valid input", () => {
+    const companion = buildImagePrompt("中".repeat(100_000), "editorial", false);
+    const standalone = buildStandaloneImagePrompt("x".repeat(20_000), "minimal", false);
+
+    expect(companion.length).toBeLessThanOrEqual(MAX_IMAGE_PROMPT_LENGTH);
+    expect(companion).toContain("Source shortened locally");
+    expect(standalone.length).toBeLessThanOrEqual(MAX_IMAGE_PROMPT_LENGTH);
+    expect(
+      isImageGenerationInput({
+        sourceText: "中".repeat(100_000),
+        prompt: companion,
+        style: "editorial",
+        aspectRatio: "16:9",
+        size: "1K",
+        includeText: false,
+      }),
+    ).toBe(true);
   });
 });

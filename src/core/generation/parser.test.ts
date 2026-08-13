@@ -62,4 +62,18 @@ describe("generation output parser", () => {
       threads: [{ posts: [{ text: "Hook" }, { text: "Detail" }, { text: "Close" }] }],
     });
   });
+
+  it("uses the X longer-post limit for custom targets over 280 characters", () => {
+    const result = parseGenerationOutput(
+      '{"candidates":[{"text":"Longer reply"}]}',
+      createGenerationInputFixture({
+        contentType: "reply",
+        length: "custom",
+        customLength: 1_000,
+      }),
+      metadata,
+    );
+
+    expect(result.softCharacterLimit).toBe(25_000);
+  });
 });

@@ -239,6 +239,7 @@
   "lengthAboveTargetShort": "longer than target",
   "tokenBudgetWarning": "This draft may be truncated: the profile limit is {current} tokens; about {recommended} is recommended for the selected length and item count. Generation is still allowed.",
   "longPostNotice": "Premium availability and final length are determined by your X account. This is a plain-text long post, not an X Article.",
+  "xWeightedCountLabel": "X count: {count}",
   "generateImage": "Generate image",
   "imageGeneratorTitle": "Create a companion image",
   "standaloneImageTitle": "Create an image",
