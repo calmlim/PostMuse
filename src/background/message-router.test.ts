@@ -65,6 +65,11 @@ beforeEach(() => {
     runtime: {
       id: "extension-id",
       getURL: (path: string) => `chrome-extension://extension-id/${path}`,
+      getManifest: () => ({
+        manifest_version: 3,
+        content_scripts: [{ matches: ["https://x.com/*"], js: ["assets/content.js"] }],
+        optional_host_permissions: ["https://*/*"],
+      }),
     },
   });
 });
@@ -653,8 +658,20 @@ describe("background message router", () => {
 
   it("revokes granted optional Provider origins and reports what remains", async () => {
     permissionGetAll
-      .mockResolvedValueOnce({ origins: ["https://api.openai.com/*", "https://api.x.ai/*"] })
-      .mockResolvedValueOnce({ origins: ["https://api.x.ai/*"] });
+      .mockResolvedValueOnce({
+        origins: ["https://x.com/*", "https://api.openai.com/*", "https://api.x.ai/*"],
+      })
+      .mockResolvedValueOnce({
+        origins: ["https://x.com/*", "https://api.openai.com/*", "https://api.x.ai/*"],
+      })
+      .mockResolvedValueOnce({ origins: ["https://x.com/*"] });
+
+    await expect(
+      routeExtensionMessage(
+        { type: "data.getProviderAccess", requestId: "provider-summary" },
+        trustedSender,
+      ),
+    ).resolves.toEqual({ ok: true, data: { grantedOriginCount: 2 } });
 
     await expect(
       routeExtensionMessage(
@@ -663,7 +680,7 @@ describe("background message router", () => {
       ),
     ).resolves.toEqual({
       ok: true,
-      data: { revokedOriginCount: 1, remainingOriginCount: 1 },
+      data: { revokedOriginCount: 2, remainingOriginCount: 0 },
     });
     expect(permissionRemove).toHaveBeenCalledWith({
       origins: ["https://api.openai.com/*", "https://api.x.ai/*"],

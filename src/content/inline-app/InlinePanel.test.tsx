@@ -166,12 +166,77 @@ describe("InlinePanel", () => {
     expect(request.input.language).toEqual({ mode: "fixed", value: "ja" });
   });
 
-  it("does not offer per-draft regeneration in inline results", async () => {
+  it("regenerates only the selected inline draft and syncs history", async () => {
     render(<InlinePanel context={context} extractionFailed={false} onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Generate drafts" }));
     expect(await screen.findByLabelText("Draft 1")).toHaveValue("Draft one");
 
-    expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Regenerate" })[0]);
+    expect(await screen.findByDisplayValue("Only the first draft changed")).toBeVisible();
     expect(screen.getByLabelText("Draft 2")).toHaveValue("Draft two");
+    const regenerateRequest = runtimeSendMessage.mock.calls.find(
+      ([request]) => request.type === "inline.regenerate",
+    )?.[0];
+    expect(regenerateRequest.input.target).toEqual({
+      kind: "candidate",
+      index: 0,
+      currentTexts: ["Draft one", "Draft two", "Draft three"],
+    });
+    await waitFor(() =>
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "inline.history.sync", historyId: "history-inline-1" }),
+      ),
+    );
+  });
+
+  it("cancels an active inline request when the panel unmounts", async () => {
+    runtimeSendMessage.mockImplementation(async (request: { type: string }) => {
+      if (request.type === "inline.bootstrap") {
+        return {
+          ok: true,
+          data: {
+            locale: "en",
+            configured: true,
+            providerDisplayName: "OpenAI",
+            model: "gpt-test",
+            defaultStyleId: "professional",
+            preferences: {
+              candidateCount: 2,
+              length: "medium",
+              language: "follow-source",
+              replyIntent: "agree-and-add",
+              quoteIntent: "comment",
+            },
+            styles: [
+              {
+                id: "professional",
+                label: "Professional",
+                version: 1,
+                isBuiltInDefault: true,
+              },
+            ],
+          },
+        };
+      }
+      if (request.type === "inline.generate") {
+        return new Promise(() => undefined);
+      }
+      return { ok: true, data: { cancelled: true } };
+    });
+    const { unmount } = render(
+      <InlinePanel context={context} extractionFailed={false} onClose={vi.fn()} />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Generate drafts" }));
+    await waitFor(() =>
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "inline.generate", requestId: expect.any(String) }),
+      ),
+    );
+    unmount();
+    await waitFor(() =>
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "inline.cancel", targetRequestId: expect.any(String) }),
+      ),
+    );
   });
 });

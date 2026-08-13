@@ -10,10 +10,21 @@ export const hasProviderOriginPermission = async (baseUrl: string): Promise<bool
 
 export const getGrantedProviderOrigins = async (): Promise<string[]> => {
   const permissions = await chrome.permissions.getAll();
+  const manifest = chrome.runtime.getManifest?.();
+  const requiredOrigins = new Set([
+    ...(manifest?.host_permissions ?? []),
+    ...(manifest?.content_scripts ?? []).flatMap((script) => script.matches ?? []),
+  ]);
   return (permissions.origins ?? []).filter(
-    (origin) => origin.startsWith("https://") || origin.startsWith("http://"),
+    (origin) =>
+      (origin.startsWith("https://") || origin.startsWith("http://")) &&
+      !requiredOrigins.has(origin),
   );
 };
+
+export const getProviderPermissionSummary = async (): Promise<{
+  grantedOriginCount: number;
+}> => ({ grantedOriginCount: (await getGrantedProviderOrigins()).length });
 
 export const revokeGrantedProviderOrigins = async (): Promise<{
   revokedOriginCount: number;

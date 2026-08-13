@@ -10,6 +10,7 @@ if (profile !== "development" && profile !== "store") {
 const root = "dist";
 const toPackagePath = (file) => relative(root, file).split(sep).join("/");
 const manifest = JSON.parse(await readFile(join(root, "manifest.json"), "utf8"));
+const privacyPolicy = await readFile(join(root, "privacy.html"), "utf8");
 const failures = [];
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
@@ -20,6 +21,14 @@ assert(
   JSON.stringify([...(manifest.permissions ?? [])].sort()) ===
     JSON.stringify(["sidePanel", "storage"].sort()),
   "required permissions must be exactly sidePanel and storage",
+);
+assert(
+  privacyPolicy.includes(
+    "generated images, their metadata, and generated text are stored locally in",
+  ) &&
+    privacyPolicy.includes("IndexedDB") &&
+    !privacyPolicy.includes("held only for the current preview/download session"),
+  "privacy policy must disclose local generated-image history",
 );
 assert(
   manifest.content_security_policy?.extension_pages === "script-src 'self'; object-src 'self'",

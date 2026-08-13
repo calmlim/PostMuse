@@ -69,3 +69,7 @@ export interface ProviderPermissionSummary {
   revokedOriginCount: number;
   remainingOriginCount: number;
 }
+
+export interface GrantedProviderPermissionSummary {
+  grantedOriginCount: number;
+}

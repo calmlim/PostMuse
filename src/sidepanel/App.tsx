@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { BrandMark } from "../components/BrandMark";
 import { createRequestId } from "../core/contracts/messages";
 import type { GenerationInput } from "../core/generation/types";
+import type { ImageGenerationInput } from "../core/image/types";
 import { detectPreferredLocale, getMessages, type Locale, UI_LOCALE_OPTIONS } from "../i18n";
 import { loadUiLocale, saveUiLocale } from "../storage/locale-storage";
 import { PENDING_X_CONTEXT_STORAGE_KEY, takePendingXContext } from "../storage/pending-context";
@@ -32,6 +33,10 @@ export function App() {
   const [historyDraft, setHistoryDraft] = useState<{
     requestId: string;
     input: GenerationInput;
+  }>();
+  const [imageHistoryDraft, setImageHistoryDraft] = useState<{
+    requestId: string;
+    input: ImageGenerationInput;
   }>();
   const copy = getMessages(locale);
 
@@ -92,7 +97,14 @@ export function App() {
   };
 
   const reuseHistoryInput = (input: GenerationInput) => {
+    setImageHistoryDraft(undefined);
     setHistoryDraft({ requestId: createRequestId(), input });
+    selectView("create");
+  };
+
+  const reuseHistoryImageInput = (input: ImageGenerationInput) => {
+    setHistoryDraft(undefined);
+    setImageHistoryDraft({ requestId: createRequestId(), input });
     selectView("create");
   };
 
@@ -102,6 +114,7 @@ export function App() {
     setPromptRevision((revision) => revision + 1);
     setHistoryRevision((revision) => revision + 1);
     setHistoryDraft(undefined);
+    setImageHistoryDraft(undefined);
     setDataRevision((revision) => revision + 1);
   };
 
@@ -145,6 +158,7 @@ export function App() {
             promptRevision={promptRevision}
             historyRevision={historyRevision}
             historyDraft={historyDraft}
+            imageHistoryDraft={imageHistoryDraft}
             onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)}
           />
         </div>
@@ -156,6 +170,7 @@ export function App() {
               revision={historyRevision}
               onHistoryChanged={() => setHistoryRevision((revision) => revision + 1)}
               onReuseInput={reuseHistoryInput}
+              onReuseImageInput={reuseHistoryImageInput}
             />
           ) : null}
           {visitedPersistentViews.prompts ? (

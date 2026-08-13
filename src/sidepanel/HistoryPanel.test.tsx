@@ -3,8 +3,16 @@ import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createGenerationInputFixture } from "../core/generation/fixtures";
 import type { GenerationInput, GenerationResult } from "../core/generation/types";
+import type { ImageGenerationInput, ImageGenerationResult } from "../core/image/types";
 import { getMessages } from "../i18n";
-import { listHistoryRecords, saveHistoryRecord } from "../storage/history-repository";
+import {
+  HISTORY_DATABASE_NAME,
+  HISTORY_IMAGE_STORE_NAME,
+  listHistoryRecords,
+  saveHistoryRecord,
+  saveImageHistoryRecord,
+  updateHistoryMedia,
+} from "../storage/history-repository";
 import { createStorageAreaMock } from "../test/chrome-storage";
 import { HistoryPanel } from "./HistoryPanel";
 
@@ -18,7 +26,7 @@ const resultFixture = (text: string): GenerationResult => ({
   softCharacterLimit: 280,
 });
 
-const renderHistory = (onReuseInput = vi.fn()) => {
+const renderHistory = (onReuseInput = vi.fn(), onReuseImageInput = vi.fn()) => {
   const copy = getMessages("en");
   function Harness() {
     const [revision, setRevision] = useState(0);
@@ -29,6 +37,7 @@ const renderHistory = (onReuseInput = vi.fn()) => {
         revision={revision}
         onHistoryChanged={() => setRevision((current) => current + 1)}
         onReuseInput={onReuseInput}
+        onReuseImageInput={onReuseImageInput}
       />
     );
   }
@@ -45,6 +54,26 @@ beforeEach(() => {
 });
 
 describe("HistoryPanel", () => {
+  const imageInput: ImageGenerationInput = {
+    sourceText: "A red paper boat",
+    prompt: "A red paper boat on a quiet lake",
+    style: "illustration",
+    aspectRatio: "16:9",
+    size: "2K",
+    includeText: true,
+  };
+  const imageResult: ImageGenerationResult = {
+    provider: "openai",
+    model: "gpt-image-2",
+    prompt: imageInput.prompt,
+    aspectRatio: "16:9",
+    size: "2K",
+    mimeType: "image/png",
+    base64Data: "aW1hZ2U=",
+    pixelWidth: 2048,
+    pixelHeight: 1152,
+  };
+
   it("searches source and result text, copies, and reuses the saved input", async () => {
     const firstInput = createGenerationInputFixture({
       source: { kind: "idea", text: "A launch lesson" },
@@ -157,5 +186,75 @@ describe("HistoryPanel", () => {
       screen.getByText("New results will not be saved. Existing history remains available."),
     ).toBeVisible();
     expect(await listHistoryRecords()).toHaveLength(1);
+  });
+
+  it("paginates history ten records at a time", async () => {
+    for (let index = 0; index < 11; index += 1) {
+      await saveHistoryRecord(
+        createGenerationInputFixture({
+          source: { kind: "idea", text: `Paged source ${index}` },
+          candidateCount: 1,
+        }),
+        resultFixture(`Paged result ${index}`),
+        { recipeVersion: 1, styleTemplateVersion: 1, now: new Date(index * 1_000) },
+      );
+    }
+
+    renderHistory();
+    await screen.findByText("Paged source 10");
+    expect(document.querySelectorAll(".history-card")).toHaveLength(10);
+    fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
+    expect(await screen.findByText("Paged source 0")).toBeVisible();
+    expect(document.querySelectorAll(".history-card")).toHaveLength(11);
+  });
+
+  it("reuses complete image settings and reports missing local bytes", async () => {
+    const record = await saveImageHistoryRecord(imageInput, imageResult);
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open(HISTORY_DATABASE_NAME, 2);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(HISTORY_IMAGE_STORE_NAME, "readwrite");
+        transaction.objectStore(HISTORY_IMAGE_STORE_NAME).delete(record.id);
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+    const onReuseImageInput = vi.fn();
+
+    renderHistory(vi.fn(), onReuseImageInput);
+    expect(await screen.findByText("This local image is unavailable.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Create again" }));
+    expect(onReuseImageInput).toHaveBeenCalledWith(imageInput);
+  });
+
+  it("restores a companion image prompt as the standalone description", async () => {
+    const textRecord = await saveHistoryRecord(
+      createGenerationInputFixture({ candidateCount: 1 }),
+      resultFixture("Source candidate"),
+      { recipeVersion: 1, styleTemplateVersion: 1 },
+    );
+    await updateHistoryMedia(textRecord.id, imageInput, imageResult);
+    const onReuseImageInput = vi.fn();
+
+    renderHistory(vi.fn(), onReuseImageInput);
+    fireEvent.click(await screen.findByRole("button", { name: "Create again" }));
+    expect(onReuseImageInput).toHaveBeenCalledWith({
+      ...imageInput,
+      sourceText: imageInput.prompt,
+    });
+  });
+
+  it("replaces an unreadable local image with an explicit unavailable state", async () => {
+    await saveImageHistoryRecord(imageInput, imageResult);
+
+    renderHistory();
+    const image = await screen.findByRole("img", { name: "Image ready" });
+    fireEvent.error(image);
+    expect(await screen.findByText("This local image is unavailable.")).toBeVisible();
   });
 });

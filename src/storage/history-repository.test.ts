@@ -6,10 +6,15 @@ import type { ImageGenerationInput, ImageGenerationResult } from "../core/image/
 import {
   clearHistoryRecords,
   deleteHistoryRecord,
+  getHistoryStorageSummary,
+  HISTORY_DATABASE_NAME,
+  HISTORY_IMAGE_STORE_NAME,
+  HISTORY_STORE_NAME,
   listHistoryRecords,
   loadHistoryImageBlob,
   saveHistoryRecord,
   saveImageHistoryRecord,
+  selectRetainedHistoryIds,
   updateHistoryMedia,
   updateHistoryResult,
 } from "./history-repository";
@@ -51,6 +56,40 @@ beforeEach(() => {
 });
 
 describe("history repository", () => {
+  it("upgrades a version 1 database without losing text history", async () => {
+    const input = createGenerationInputFixture({ candidateCount: 1 });
+    const legacyRecord = {
+      schemaVersion: 1,
+      id: "legacy-history",
+      createdAt: new Date(1_000).toISOString(),
+      updatedAt: new Date(1_000).toISOString(),
+      input,
+      result: resultFixture("Legacy result"),
+      prompt: {
+        recipeVersion: 1,
+        styleTemplateId: input.styleId,
+        styleTemplateVersion: 1,
+      },
+    };
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open(HISTORY_DATABASE_NAME, 1);
+      request.onupgradeneeded = () => {
+        const store = request.result.createObjectStore(HISTORY_STORE_NAME, { keyPath: "id" });
+        store.createIndex("updatedAt", "updatedAt", { unique: false });
+        store.put(legacyRecord);
+      };
+      request.onsuccess = () => {
+        request.result.close();
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    expect(await listHistoryRecords()).toMatchObject([{ id: "legacy-history" }]);
+    await saveImageHistoryRecord(imageInputFixture, imageResultFixture);
+    expect(await getHistoryStorageSummary()).toMatchObject({ recordCount: 2, imageBytes: 5 });
+  });
+
   it("keeps the newest 100 records transactionally", async () => {
     for (let index = 0; index < 101; index += 1) {
       await saveHistoryRecord(
@@ -122,16 +161,69 @@ describe("history repository", () => {
       { recipeVersion: 1, styleTemplateVersion: 1 },
     );
 
-    await updateHistoryMedia(record.id, imageResultFixture);
+    await updateHistoryMedia(record.id, imageInputFixture, imageResultFixture);
 
     const stored = (await listHistoryRecords()).find((item) => item.id === record.id);
     expect(stored && isHistoryRecordV1(stored) ? stored.media : undefined).toMatchObject({
       provider: "openai",
       size: "1K",
       pixelWidth: 1024,
+      input: imageInputFixture,
     });
     expect(JSON.stringify(stored)).not.toContain("base64Data");
     expect(await loadHistoryImageBlob(record.id)).toMatchObject({ size: 5, type: "image/png" });
+  });
+
+  it("removes orphan image bytes during the next transactional prune", async () => {
+    await saveImageHistoryRecord(imageInputFixture, imageResultFixture);
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open(HISTORY_DATABASE_NAME, 2);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(HISTORY_IMAGE_STORE_NAME, "readwrite");
+        transaction.objectStore(HISTORY_IMAGE_STORE_NAME).put({
+          historyId: "orphan-image",
+          bytes: new Uint8Array([1, 2, 3]),
+          mimeType: "image/png",
+        });
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    await saveHistoryRecord(
+      createGenerationInputFixture({ candidateCount: 1 }),
+      resultFixture("Trigger prune"),
+      { recipeVersion: 1, styleTemplateVersion: 1 },
+    );
+    expect(await loadHistoryImageBlob("orphan-image")).toBeUndefined();
+  });
+
+  it("retains newest records within a configurable image-byte budget", async () => {
+    const first = await saveHistoryRecord(
+      createGenerationInputFixture({ source: { kind: "idea", text: "First" }, candidateCount: 1 }),
+      resultFixture("First"),
+      { recipeVersion: 1, styleTemplateVersion: 1, now: new Date(1_000) },
+    );
+    const second = await saveHistoryRecord(
+      createGenerationInputFixture({ source: { kind: "idea", text: "Second" }, candidateCount: 1 }),
+      resultFixture("Second"),
+      { recipeVersion: 1, styleTemplateVersion: 1, now: new Date(2_000) },
+    );
+    const retained = selectRetainedHistoryIds(
+      [first, second],
+      new Map([
+        [first.id, 6],
+        [second.id, 6],
+      ]),
+      { recordCount: 100, recordBytes: Number.MAX_SAFE_INTEGER, imageBytes: 10 },
+    );
+
+    expect([...retained]).toEqual([second.id]);
   });
 
   it("stores standalone images as first-class history records", async () => {

@@ -23,8 +23,12 @@ interface ImageGeneratorProps {
   snapshot?: SettingsSnapshot;
   onOpenSettings: () => void;
   onClose: () => void;
-  onGenerated?: (result: ImageGenerationResult, input: ImageGenerationInput) => void;
+  onGenerated?: (
+    result: ImageGenerationResult,
+    input: ImageGenerationInput,
+  ) => Promise<void> | void;
   mode?: "companion" | "standalone";
+  initialInput?: ImageGenerationInput;
 }
 
 const getFriendlyImageError = (error: unknown, copy: Messages): string => {
@@ -59,13 +63,18 @@ export function ImageGenerator({
   onClose,
   onGenerated,
   mode = "companion",
+  initialInput,
 }: ImageGeneratorProps) {
-  const [style, setStyle] = useState<ImageStyle>("editorial");
-  const [aspectRatio, setAspectRatio] = useState<"1:1" | "16:9" | "9:16">("1:1");
-  const [size, setSize] = useState<"1K" | "2K">("1K");
-  const [includeText, setIncludeText] = useState(false);
-  const [prompt, setPrompt] = useState(() =>
-    mode === "standalone" ? sourceText : buildImagePrompt(sourceText, "editorial", false),
+  const [style, setStyle] = useState<ImageStyle>(initialInput?.style ?? "editorial");
+  const [aspectRatio, setAspectRatio] = useState<"1:1" | "16:9" | "9:16">(
+    initialInput?.aspectRatio ?? "1:1",
+  );
+  const [size, setSize] = useState<"1K" | "2K">(initialInput?.size ?? "1K");
+  const [includeText, setIncludeText] = useState(initialInput?.includeText ?? false);
+  const [prompt, setPrompt] = useState(
+    () =>
+      initialInput?.sourceText ??
+      (mode === "standalone" ? sourceText : buildImagePrompt(sourceText, "editorial", false)),
   );
   const [result, setResult] = useState<ImageGenerationResult>();
   const [objectUrl, setObjectUrl] = useState<string>();
@@ -73,6 +82,17 @@ export function ImageGenerator({
   const [isGenerating, setIsGenerating] = useState(false);
   const activeRequestId = useRef<string | undefined>(undefined);
   const isStandalone = mode === "standalone";
+
+  useEffect(
+    () => () => {
+      const targetRequestId = activeRequestId.current;
+      if (targetRequestId) {
+        activeRequestId.current = undefined;
+        void sendExtensionRequest({ type: "image.cancel", targetRequestId }).catch(() => undefined);
+      }
+    },
+    [],
+  );
 
   const profile = useMemo(
     () =>
@@ -89,12 +109,17 @@ export function ImageGenerator({
   );
 
   useEffect(() => {
-    setPrompt(isStandalone ? sourceText : buildImagePrompt(sourceText, "editorial", false));
-    setStyle("editorial");
-    setIncludeText(false);
+    setPrompt(
+      initialInput?.sourceText ??
+        (isStandalone ? sourceText : buildImagePrompt(sourceText, "editorial", false)),
+    );
+    setStyle(initialInput?.style ?? "editorial");
+    setAspectRatio(initialInput?.aspectRatio ?? "1:1");
+    setSize(initialInput?.size ?? "1K");
+    setIncludeText(initialInput?.includeText ?? false);
     setResult(undefined);
     setError(undefined);
-  }, [isStandalone, sourceText]);
+  }, [initialInput, isStandalone, sourceText]);
 
   useEffect(() => {
     if (!result || typeof URL.createObjectURL !== "function") {
@@ -170,7 +195,11 @@ export function ImageGenerator({
       );
       if (activeRequestId.current === requestId) {
         setResult(generated);
-        onGenerated?.(generated, generationInput);
+        try {
+          await onGenerated?.(generated, generationInput);
+        } catch {
+          setError(copy.historySaveError);
+        }
       }
     } catch (generationError) {
       if (activeRequestId.current === requestId) {
@@ -193,6 +222,15 @@ export function ImageGenerator({
     setIsGenerating(false);
     setError(copy.generationCancelled);
     void sendExtensionRequest({ type: "image.cancel", targetRequestId }).catch(() => undefined);
+  };
+
+  const close = () => {
+    const targetRequestId = activeRequestId.current;
+    if (targetRequestId) {
+      activeRequestId.current = undefined;
+      void sendExtensionRequest({ type: "image.cancel", targetRequestId }).catch(() => undefined);
+    }
+    onClose();
   };
 
   const download = () => {
@@ -218,12 +256,7 @@ export function ImageGenerator({
           </h3>
           <p>{isStandalone ? copy.standaloneImageBody : copy.imageGeneratorBody}</p>
         </div>
-        <button
-          type="button"
-          className="icon-button"
-          onClick={onClose}
-          aria-label={copy.inlineClose}
-        >
+        <button type="button" className="icon-button" onClick={close} aria-label={copy.inlineClose}>
           <X size={16} />
         </button>
       </div>

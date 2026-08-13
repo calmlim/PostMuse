@@ -9,6 +9,19 @@ All notable user-facing changes to PostMuse are documented here. Versions follow
 
 - Successful standalone and companion images are automatically saved to local history when history
   is enabled, with local preview, download, deletion, and bounded IndexedDB storage.
+- Candidate, long-post, thread-item, raw fallback, and X inline candidate regeneration with
+  target-only replacement, cancellation, and history synchronization.
+- Complete image-history reuse plus paginated and lazy-loaded local history previews.
+
+### Changed
+
+- Provider permission summaries and revocation now exclude the required X Content Script origin.
+- Packaged privacy disclosures now accurately describe optional local image history.
+
+### Fixed
+
+- Closing a generation panel now cancels its active Provider request.
+- Image-history save failures and missing local image data now produce visible non-blocking states.
 
 ## [0.2.0] - 2026-08-13
 
@@ -24,14 +37,14 @@ All notable user-facing changes to PostMuse are documented here. Versions follow
 ### Changed
 
 - Refined the X inline panel and Side Panel creation flows.
-- Added live Provider connection tests, safer API-key destination binding, and permission revocation.
-- Preserved complete generation settings during regeneration and reduced oversized regeneration context.
+- Added live Provider connection tests and safer API-key destination binding.
+- Reduced oversized regeneration context.
 - Added bounded local history storage and safer long-content image prompting.
 
 ### Fixed
 
 - Corrected OpenAI image aspect-ratio and final pixel-size handling.
-- Fixed custom lengths above 280 and targeted regeneration through the 25,000-character boundary.
+- Fixed custom lengths above 280 and regeneration validation through the 25,000-character boundary.
 - Fixed Anthropic/Gemini sampling compatibility and Provider-specific request parameters.
 - Fixed inline history synchronization, copy feedback, cancellation, and several X navigation interactions.
 

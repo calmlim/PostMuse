@@ -36,6 +36,41 @@ const getStoredByteLength = (value: unknown): number | undefined =>
 const getRecordByteLength = (record: HistoryRecord): number =>
   new TextEncoder().encode(JSON.stringify(record)).byteLength;
 
+interface HistoryRetentionLimits {
+  recordCount: number;
+  recordBytes: number;
+  imageBytes: number;
+}
+
+export const selectRetainedHistoryIds = (
+  recordsOldestFirst: HistoryRecord[],
+  imageSizes: ReadonlyMap<string, number>,
+  limits: HistoryRetentionLimits = {
+    recordCount: HISTORY_LIMIT,
+    recordBytes: HISTORY_BYTE_LIMIT,
+    imageBytes: HISTORY_IMAGE_BYTE_LIMIT,
+  },
+): Set<string> => {
+  const retained = new Set<string>();
+  let retainedRecordBytes = 0;
+  let retainedImageBytes = 0;
+  for (let index = recordsOldestFirst.length - 1; index >= 0; index -= 1) {
+    const current = recordsOldestFirst[index];
+    const recordBytes = getRecordByteLength(current);
+    const imageBytes = imageSizes.get(current.id) ?? 0;
+    if (
+      retained.size < limits.recordCount &&
+      retainedRecordBytes + recordBytes <= limits.recordBytes &&
+      retainedImageBytes + imageBytes <= limits.imageBytes
+    ) {
+      retained.add(current.id);
+      retainedRecordBytes += recordBytes;
+      retainedImageBytes += imageBytes;
+    }
+  }
+  return retained;
+};
+
 const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> =>
   new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -87,6 +122,7 @@ export interface SaveHistoryOptions {
 const createImageMetadata = (
   result: ImageGenerationResult,
   generatedAt: string,
+  input?: ImageGenerationInput,
 ): ImageHistoryMetadata => ({
   type: "image",
   provider: result.provider,
@@ -98,6 +134,7 @@ const createImageMetadata = (
   pixelWidth: result.pixelWidth,
   pixelHeight: result.pixelHeight,
   generatedAt,
+  ...(input ? { input } : {}),
 });
 
 const pruneHistory = async (transaction: IDBTransaction): Promise<void> => {
@@ -110,6 +147,7 @@ const pruneHistory = async (transaction: IDBTransaction): Promise<void> => {
     requestToPromise(imagesRequest),
   ]);
   const records = storedRecords.filter(isHistoryRecord);
+  const recordIds = new Set(records.map((record) => record.id));
   const imageSizes = new Map(
     (storedImages as StoredHistoryImage[])
       .filter(
@@ -118,25 +156,18 @@ const pruneHistory = async (transaction: IDBTransaction): Promise<void> => {
       )
       .map((image) => [image.historyId, getStoredByteLength(image.bytes) ?? 0]),
   );
-  let retainedRecordBytes = 0;
-  let retainedImageBytes = 0;
-  let retainedCount = 0;
+  const retainedIds = selectRetainedHistoryIds(records, imageSizes);
 
-  for (let index = records.length - 1; index >= 0; index -= 1) {
-    const current = records[index];
-    const recordBytes = getRecordByteLength(current);
-    const imageBytes = imageSizes.get(current.id) ?? 0;
-    if (
-      retainedCount >= HISTORY_LIMIT ||
-      retainedRecordBytes + recordBytes > HISTORY_BYTE_LIMIT ||
-      retainedImageBytes + imageBytes > HISTORY_IMAGE_BYTE_LIMIT
-    ) {
+  for (const image of storedImages as StoredHistoryImage[]) {
+    if (typeof image?.historyId === "string" && !recordIds.has(image.historyId)) {
+      imageStore.delete(image.historyId);
+    }
+  }
+
+  for (const current of records) {
+    if (!retainedIds.has(current.id)) {
       historyStore.delete(current.id);
       imageStore.delete(current.id);
-    } else {
-      retainedRecordBytes += recordBytes;
-      retainedImageBytes += imageBytes;
-      retainedCount += 1;
     }
   }
 };
@@ -270,6 +301,7 @@ export const updateHistoryResult = async (
 
 export const updateHistoryMedia = async (
   historyId: string,
+  input: ImageGenerationInput,
   result: ImageGenerationResult,
   now: Date = new Date(),
 ): Promise<HistoryRecordV1> => {
@@ -291,7 +323,7 @@ export const updateHistoryMedia = async (
     }
     const updated: HistoryRecordV1 = {
       ...current,
-      media: createImageMetadata(result, now.toISOString()),
+      media: createImageMetadata(result, now.toISOString(), input),
       updatedAt: now.toISOString(),
     };
     if (!isHistoryRecordV1(updated)) {
@@ -307,6 +339,35 @@ export const updateHistoryMedia = async (
     await pruneHistory(transaction);
     await transactionToPromise(transaction);
     return updated;
+  } finally {
+    database.close();
+  }
+};
+
+export interface HistoryStorageSummary {
+  recordCount: number;
+  imageBytes: number;
+}
+
+export const getHistoryStorageSummary = async (): Promise<HistoryStorageSummary> => {
+  const database = await openHistoryDatabase();
+  try {
+    const transaction = database.transaction(
+      [HISTORY_STORE_NAME, HISTORY_IMAGE_STORE_NAME],
+      "readonly",
+    );
+    const [records, images] = await Promise.all([
+      requestToPromise(transaction.objectStore(HISTORY_STORE_NAME).getAll()),
+      requestToPromise(transaction.objectStore(HISTORY_IMAGE_STORE_NAME).getAll()),
+    ]);
+    await transactionToPromise(transaction);
+    return {
+      recordCount: records.filter(isHistoryRecord).length,
+      imageBytes: (images as StoredHistoryImage[]).reduce(
+        (total, image) => total + (getStoredByteLength(image?.bytes) ?? 0),
+        0,
+      ),
+    };
   } finally {
     database.close();
   }

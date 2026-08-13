@@ -11,7 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import type { SettingsSnapshot } from "../core/settings/types";
 import type { Messages } from "../i18n";
-import { listHistoryRecords } from "../storage/history-repository";
+import { getHistoryStorageSummary } from "../storage/history-repository";
 import { sendExtensionRequest } from "./extension-client";
 
 interface RuntimeManifestSummary {
@@ -23,6 +23,7 @@ interface RuntimeManifestSummary {
 interface DiagnosticInput {
   snapshot: SettingsSnapshot;
   historyCount: number;
+  historyImageBytes: number;
   grantedOriginCount: number;
   manifest?: RuntimeManifestSummary;
 }
@@ -30,6 +31,7 @@ interface DiagnosticInput {
 export const buildLocalDiagnostics = ({
   snapshot,
   historyCount,
+  historyImageBytes,
   grantedOriginCount,
   manifest,
 }: DiagnosticInput) => {
@@ -55,6 +57,7 @@ export const buildLocalDiagnostics = ({
     imageKeyStored: snapshot.activeImageSecretStatus.hasKey,
     imageKeyPersistence: snapshot.activeImageSecretStatus.persistence ?? "none",
     historyCount,
+    historyImageBytes,
     grantedOriginCount,
     xInlineBuild: Boolean(manifest?.content_scripts?.length),
   };
@@ -81,6 +84,7 @@ export function PrivacyDataPanel({
   revision = 0,
 }: PrivacyDataPanelProps) {
   const [historyCount, setHistoryCount] = useState(0);
+  const [historyImageBytes, setHistoryImageBytes] = useState(0);
   const [grantedOriginCount, setGrantedOriginCount] = useState(0);
   const [confirmDeleteKeys, setConfirmDeleteKeys] = useState(false);
   const [confirmRevokeOrigins, setConfirmRevokeOrigins] = useState(false);
@@ -92,14 +96,15 @@ export function PrivacyDataPanel({
   useEffect(() => {
     let active = true;
     void Promise.all([
-      listHistoryRecords().then((records) => records.length),
-      typeof chrome !== "undefined" && chrome.permissions?.getAll
-        ? chrome.permissions.getAll().then((permissions) => permissions.origins?.length ?? 0)
-        : Promise.resolve(0),
+      getHistoryStorageSummary(),
+      sendExtensionRequest({ type: "data.getProviderAccess" }).then(
+        (summary) => summary?.grantedOriginCount ?? 0,
+      ),
     ])
-      .then(([records, origins]) => {
+      .then(([history, origins]) => {
         if (active) {
-          setHistoryCount(records);
+          setHistoryCount(history.recordCount);
+          setHistoryImageBytes(history.imageBytes);
           setGrantedOriginCount(origins);
         }
       })
@@ -118,6 +123,7 @@ export function PrivacyDataPanel({
       const diagnostics = buildLocalDiagnostics({
         snapshot,
         historyCount,
+        historyImageBytes,
         grantedOriginCount,
         manifest,
       });
@@ -150,6 +156,7 @@ export function PrivacyDataPanel({
       const resetResult = await sendExtensionRequest({ type: "data.reset" });
       onSnapshot(resetResult.snapshot);
       setHistoryCount(0);
+      setHistoryImageBytes(0);
       setGrantedOriginCount(resetResult.remainingOriginCount);
       setConfirmReset(false);
       setFeedback({ kind: "success", text: copy.localDataReset });
@@ -210,6 +217,15 @@ export function PrivacyDataPanel({
         </strong>
         <span>{copy.historyItemSummary}</span>
         <strong>{historyCount.toLocaleString()}</strong>
+        <span>{copy.historyImageStorageSummary}</span>
+        <strong>
+          {new Intl.NumberFormat(undefined, {
+            style: "unit",
+            unit: "megabyte",
+            unitDisplay: "short",
+            maximumFractionDigits: 1,
+          }).format(historyImageBytes / (1024 * 1024))}
+        </strong>
         <span>{copy.originPermissionSummary}</span>
         <strong>{grantedOriginCount.toLocaleString()}</strong>
       </fieldset>

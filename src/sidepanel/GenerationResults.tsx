@@ -4,6 +4,7 @@ import {
   Check,
   Copy,
   ImageSquare,
+  StopCircle,
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useState } from "react";
@@ -29,9 +30,15 @@ interface GenerationResultsProps {
   rawHistorySaved?: boolean;
   settingsSnapshot?: SettingsSnapshot;
   onOpenSettings?: () => void;
-  onImageGenerated?: (result: ImageGenerationResult, input: ImageGenerationInput) => void;
+  onImageGenerated?: (
+    result: ImageGenerationResult,
+    input: ImageGenerationInput,
+  ) => Promise<void> | void;
   onCopied?: (result: GenerationResult) => Promise<void> | void;
   onRegenerateAll?: () => void;
+  onRegenerateItem?: (kind: "candidate" | "thread-post", index: number) => void;
+  onCancelRegeneration?: () => void;
+  regeneratingTarget?: { kind: "candidate" | "thread-post"; index: number };
   isRegenerating?: boolean;
 }
 
@@ -49,6 +56,9 @@ export function GenerationResults({
   onImageGenerated,
   onCopied,
   onRegenerateAll,
+  onRegenerateItem,
+  onCancelRegeneration,
+  regeneratingTarget,
   isRegenerating = false,
 }: GenerationResultsProps) {
   const [copyStatus, setCopyStatus] = useState<string>();
@@ -123,6 +133,28 @@ export function GenerationResults({
     onChange(input ? refreshLengthWarnings(nextResult, input) : nextResult);
   };
 
+  const renderRegenerateButton = (kind: "candidate" | "thread-post", index: number) => {
+    if (!onRegenerateItem) {
+      return null;
+    }
+    const isCurrent = regeneratingTarget?.kind === kind && regeneratingTarget.index === index;
+    return (
+      <button
+        type="button"
+        className="copy-button"
+        onClick={() => (isCurrent ? onCancelRegeneration?.() : onRegenerateItem(kind, index))}
+        disabled={isRegenerating && !isCurrent}
+      >
+        {isCurrent ? (
+          <StopCircle size={16} weight="bold" aria-hidden="true" />
+        ) : (
+          <ArrowsClockwise size={16} weight="bold" aria-hidden="true" />
+        )}
+        {isCurrent ? copy.cancelGeneration : copy.regenerateItem}
+      </button>
+    );
+  };
+
   return (
     <section className="results-section" aria-labelledby="results-title">
       <div className="results-heading">
@@ -190,6 +222,7 @@ export function GenerationResults({
                   rows={result.candidates.length === 1 ? 10 : 5}
                 />
                 <div className="result-card-actions">
+                  {renderRegenerateButton("candidate", index)}
                   {canGenerateImage ? (
                     <button
                       type="button"
@@ -251,6 +284,7 @@ export function GenerationResults({
                   rows={5}
                 />
                 <div className="result-card-actions">
+                  {renderRegenerateButton("thread-post", index)}
                   {canGenerateImage ? (
                     <button
                       type="button"
@@ -301,6 +335,7 @@ export function GenerationResults({
             rows={10}
           />
           <div className="result-card-actions">
+            {renderRegenerateButton("candidate", 0)}
             {canGenerateImage ? (
               <button
                 type="button"

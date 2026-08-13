@@ -22,6 +22,7 @@ type ExtensionRequestInput =
   | { type: "image.generate"; input: ImageGenerationInput }
   | { type: "image.cancel"; targetRequestId: string }
   | { type: "data.deleteKeys" }
+  | { type: "data.getProviderAccess" }
   | { type: "data.revokeOrigins" }
   | { type: "data.reset" };
 
@@ -61,6 +62,9 @@ export function sendExtensionRequest(
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "data.deleteKeys" }>,
 ): Promise<ExtensionResponseMap["data.deleteKeys"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "data.getProviderAccess" }>,
+): Promise<ExtensionResponseMap["data.getProviderAccess"]>;
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "data.revokeOrigins" }>,
 ): Promise<ExtensionResponseMap["data.revokeOrigins"]>;

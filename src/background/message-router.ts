@@ -32,6 +32,7 @@ import {
 import { runConnectionTest } from "./provider-connection-tester";
 import {
   getGrantedProviderOrigins,
+  getProviderPermissionSummary,
   hasProviderOriginPermission,
   revokeGrantedProviderOrigins,
 } from "./permissions";
@@ -276,6 +277,10 @@ const handleRequest = async (
   if (request.type === "data.deleteKeys") {
     await deleteAllApiKeys();
     return { ok: true, data: await getSnapshot() };
+  }
+
+  if (request.type === "data.getProviderAccess") {
+    return { ok: true, data: await getProviderPermissionSummary() };
   }
 
   if (request.type === "data.revokeOrigins") {

@@ -441,6 +441,82 @@ describe("Side Panel App", () => {
     await waitFor(async () => expect(await listHistoryRecords()).toHaveLength(1));
   });
 
+  it("regenerates only one candidate and synchronizes the current history", async () => {
+    const settings = createDefaultSettings();
+    settings.textProviderProfiles[0] = {
+      ...settings.textProviderProfiles[0],
+      model: "gpt-test",
+    };
+    runtimeSendMessage.mockImplementation(async (request: { type: string }) => {
+      if (request.type === "settings.get") {
+        return {
+          ok: true,
+          data: {
+            settings,
+            activeSecretStatus: { hasKey: true, persistence: "session" },
+          },
+        };
+      }
+      if (request.type === "text.generate") {
+        return {
+          ok: true,
+          data: {
+            format: "candidates",
+            contentType: "post",
+            candidates: [
+              { id: "candidate-1", text: "Keep the first draft" },
+              { id: "candidate-2", text: "Replace the second draft" },
+            ],
+            warnings: [],
+            provider: "openai-compatible",
+            model: "gpt-test",
+            softCharacterLimit: 280,
+          },
+        };
+      }
+      if (request.type === "text.regenerate") {
+        return {
+          ok: true,
+          data: {
+            text: "Only the second draft changed",
+            provider: "openai-compatible",
+            model: "gpt-test",
+          },
+        };
+      }
+      return { ok: true, data: { cancelled: true } };
+    });
+
+    render(<App />);
+    await screen.findByText(/Generate sends this draft directly/);
+    fireEvent.change(screen.getByLabelText("Your idea or draft"), {
+      target: { value: "Regeneration source" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
+    expect(await screen.findByLabelText("Candidate 2")).toHaveValue("Replace the second draft");
+    const regenerateButtons = screen.getAllByRole("button", { name: "Regenerate" });
+    await waitFor(() => expect(regenerateButtons[1]).toBeEnabled());
+    fireEvent.click(regenerateButtons[1]);
+
+    expect(await screen.findByDisplayValue("Only the second draft changed")).toBeVisible();
+    expect(screen.getByLabelText("Candidate 1")).toHaveValue("Keep the first draft");
+    const regenerateRequest = runtimeSendMessage.mock.calls.find(
+      ([request]) => request.type === "text.regenerate",
+    )?.[0];
+    expect(regenerateRequest.input.target).toEqual({
+      kind: "candidate",
+      index: 1,
+      currentTexts: ["Keep the first draft", "Replace the second draft"],
+    });
+    await waitFor(async () =>
+      expect((await listHistoryRecords())[0]).toMatchObject({
+        result: {
+          candidates: [{ text: "Keep the first draft" }, { text: "Only the second draft changed" }],
+        },
+      }),
+    );
+  });
+
   it("saves raw fallback text only after explicit confirmation", async () => {
     const settings = createDefaultSettings();
     settings.textProviderProfiles[0] = {

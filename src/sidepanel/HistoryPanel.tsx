@@ -3,13 +3,14 @@ import {
   Check,
   Copy,
   DownloadSimple,
+  ImageSquare,
   MagnifyingGlass,
   PencilSimple,
   Trash,
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GenerationInput, GenerationResult } from "../core/generation/types";
 import {
   getHistoryResultText,
@@ -18,6 +19,7 @@ import {
   isImageHistoryRecordV2,
 } from "../core/history/types";
 import type { ImageHistoryMetadata } from "../core/image/types";
+import type { ImageGenerationInput } from "../core/image/types";
 import type { Locale, Messages } from "../i18n";
 import { loadHistoryEnabled, saveHistoryEnabled } from "../storage/history-preferences";
 import {
@@ -35,6 +37,7 @@ interface HistoryPanelProps {
   revision: number;
   onHistoryChanged: () => void;
   onReuseInput: (input: GenerationInput) => void;
+  onReuseImageInput: (input: ImageGenerationInput) => void;
 }
 
 interface HistoryEditor {
@@ -65,52 +68,118 @@ interface HistoryImagePreviewProps {
 
 function HistoryImagePreview({ historyId, metadata, copy }: HistoryImagePreviewProps) {
   const [objectUrl, setObjectUrl] = useState<string>();
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "missing" | "error">("idle");
+  const containerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let active = true;
     let nextUrl: string | undefined;
-    void loadHistoryImageBlob(historyId)
-      .then((blob) => {
-        if (active && blob) {
+    let observer: IntersectionObserver | undefined;
+    const load = () => {
+      setStatus("loading");
+      void loadHistoryImageBlob(historyId)
+        .then((blob) => {
+          if (!active) {
+            return;
+          }
+          if (!blob) {
+            setStatus("missing");
+            return;
+          }
           nextUrl = URL.createObjectURL(blob);
           setObjectUrl(nextUrl);
-        }
-      })
-      .catch(() => undefined);
+          setStatus("ready");
+        })
+        .catch(() => {
+          if (active) {
+            setStatus("error");
+          }
+        });
+    };
+    if (typeof IntersectionObserver === "function" && containerRef.current) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            observer?.disconnect();
+            load();
+          }
+        },
+        { rootMargin: "240px" },
+      );
+      observer.observe(containerRef.current);
+    } else {
+      load();
+    }
     return () => {
       active = false;
+      observer?.disconnect();
       if (nextUrl) {
         URL.revokeObjectURL(nextUrl);
       }
     };
   }, [historyId]);
 
-  if (!objectUrl) {
-    return null;
-  }
   const extension = metadata.mimeType === "image/jpeg" ? "jpg" : metadata.mimeType.split("/")[1];
   return (
-    <figure className="history-image-preview">
-      <img src={objectUrl} alt={copy.imageReady} />
-      <figcaption>
-        <span>
-          {metadata.aspectRatio} · {metadata.size}
-          {metadata.pixelWidth && metadata.pixelHeight
-            ? ` · ${metadata.pixelWidth}×${metadata.pixelHeight}`
-            : ""}
-        </span>
-        <a
-          className="secondary-button"
-          href={objectUrl}
-          download={`postmuse-history-${historyId}.${extension}`}
-        >
-          <DownloadSimple size={15} aria-hidden="true" />
-          {copy.downloadImage}
-        </a>
-      </figcaption>
+    <figure className="history-image-preview" ref={containerRef}>
+      {objectUrl ? (
+        <img
+          src={objectUrl}
+          alt={copy.imageReady}
+          loading="lazy"
+          onError={() => {
+            URL.revokeObjectURL(objectUrl);
+            setObjectUrl(undefined);
+            setStatus("error");
+          }}
+        />
+      ) : null}
+      {status === "missing" || status === "error" ? (
+        <div className="history-image-unavailable" role="status">
+          <WarningCircle size={18} aria-hidden="true" />
+          {copy.historyImageUnavailable}
+        </div>
+      ) : null}
+      {status === "idle" || status === "loading" ? (
+        <div className="history-image-unavailable" aria-hidden="true">
+          {copy.historyImageLoading}
+        </div>
+      ) : null}
+      {objectUrl ? (
+        <figcaption>
+          <span>
+            {metadata.aspectRatio} · {metadata.size}
+            {metadata.pixelWidth && metadata.pixelHeight
+              ? ` · ${metadata.pixelWidth}×${metadata.pixelHeight}`
+              : ""}
+          </span>
+          <a
+            className="secondary-button"
+            href={objectUrl}
+            download={`postmuse-history-${historyId}.${extension}`}
+          >
+            <DownloadSimple size={15} aria-hidden="true" />
+            {copy.downloadImage}
+          </a>
+        </figcaption>
+      ) : null}
     </figure>
   );
 }
+
+const HISTORY_PAGE_SIZE = 10;
+const HISTORY_PREVIEW_CHARACTERS = 500;
+const truncateHistoryPreview = (value: string): string => {
+  const characters = Array.from(value);
+  return characters.length <= HISTORY_PREVIEW_CHARACTERS
+    ? value
+    : `${characters.slice(0, HISTORY_PREVIEW_CHARACTERS).join("")}…`;
+};
+
+const createCompanionImageDraft = (input: ImageGenerationInput): ImageGenerationInput => ({
+  ...structuredClone(input),
+  sourceText: input.prompt,
+});
 
 export function HistoryPanel({
   copy,
@@ -118,6 +187,7 @@ export function HistoryPanel({
   revision,
   onHistoryChanged,
   onReuseInput,
+  onReuseImageInput,
 }: HistoryPanelProps) {
   const [records, setRecords] = useState<HistoryRecord[]>([]);
   const [enabled, setEnabled] = useState(true);
@@ -126,6 +196,7 @@ export function HistoryPanel({
   const [deleteId, setDeleteId] = useState<string>();
   const [confirmClear, setConfirmClear] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string }>();
+  const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE_SIZE);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revision is an explicit repository reload signal.
   useEffect(() => {
@@ -159,6 +230,7 @@ export function HistoryPanel({
       return searchable.toLocaleLowerCase(locale).includes(normalized);
     });
   }, [locale, query, records]);
+  const visibleRecords = filteredRecords.slice(0, visibleCount);
 
   const toggleEnabled = async () => {
     const next = !enabled;
@@ -256,7 +328,10 @@ export function HistoryPanel({
             <input
               type="search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setVisibleCount(HISTORY_PAGE_SIZE);
+              }}
               placeholder={copy.historySearchPlaceholder}
             />
           </span>
@@ -312,8 +387,9 @@ export function HistoryPanel({
         </section>
       ) : (
         <div className="history-list">
-          {filteredRecords.map((record) => {
+          {visibleRecords.map((record) => {
             const isImageRecord = isImageHistoryRecordV2(record);
+            const companionImageInput = isImageRecord ? undefined : record.media?.input;
             return (
               <article className="history-card" key={record.id}>
                 <div className="history-card-heading">
@@ -339,7 +415,7 @@ export function HistoryPanel({
                     />
                     <div className="history-preview">
                       <span>{copy.imageDescriptionLabel}</span>
-                      <p>{record.input.sourceText}</p>
+                      <p>{truncateHistoryPreview(record.input.sourceText)}</p>
                     </div>
                   </>
                 ) : (
@@ -353,24 +429,34 @@ export function HistoryPanel({
                     ) : null}
                     <div className="history-preview">
                       <span>{copy.historySourceLabel}</span>
-                      <p>{record.input.source.text}</p>
+                      <p>{truncateHistoryPreview(record.input.source.text)}</p>
                     </div>
                     <div className="history-preview">
                       <span>{copy.historyResultLabel}</span>
-                      <p>{getHistoryResultText(record.result)}</p>
+                      <p>{truncateHistoryPreview(getHistoryResultText(record.result))}</p>
                     </div>
                   </>
                 )}
                 <div className="history-actions">
                   {isImageRecord ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => copyImageDescription(record.input.sourceText)}
-                    >
-                      <Copy size={15} aria-hidden="true" />
-                      {copy.copyText}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => onReuseImageInput(structuredClone(record.input))}
+                      >
+                        <ArrowCounterClockwise size={15} aria-hidden="true" />
+                        {copy.historyReuseImage}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => copyImageDescription(record.input.sourceText)}
+                      >
+                        <Copy size={15} aria-hidden="true" />
+                        {copy.copyText}
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button
@@ -403,6 +489,18 @@ export function HistoryPanel({
                         <ArrowCounterClockwise size={15} aria-hidden="true" />
                         {copy.historyReuse}
                       </button>
+                      {companionImageInput ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() =>
+                            onReuseImageInput(createCompanionImageDraft(companionImageInput))
+                          }
+                        >
+                          <ImageSquare size={15} aria-hidden="true" />
+                          {copy.historyReuseImage}
+                        </button>
+                      ) : null}
                     </>
                   )}
                   {deleteId === record.id ? (
@@ -438,6 +536,18 @@ export function HistoryPanel({
               </article>
             );
           })}
+          {visibleCount < filteredRecords.length ? (
+            <button
+              type="button"
+              className="secondary-button history-load-more"
+              onClick={() => setVisibleCount((count) => count + HISTORY_PAGE_SIZE)}
+            >
+              {copy.historyLoadMore.replace(
+                "{count}",
+                String(Math.min(HISTORY_PAGE_SIZE, filteredRecords.length - visibleCount)),
+              )}
+            </button>
+          ) : null}
         </div>
       )}
 

@@ -46,4 +46,5 @@ export interface ImageHistoryMetadata {
   pixelWidth?: number;
   pixelHeight?: number;
   generatedAt: string;
+  input?: ImageGenerationInput;
 }

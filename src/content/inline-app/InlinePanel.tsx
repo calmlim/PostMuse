@@ -1,4 +1,5 @@
 import {
+  ArrowsClockwise,
   Copy,
   GearSix,
   SidebarSimple,
@@ -70,6 +71,7 @@ const panelStyles = `
   .result { display: grid; gap: 8px; padding: 13px 0 15px; border-bottom: 1px solid #e5e3dc; }
   .result:last-child { border-bottom: 0; }
   .result-heading { min-height: 28px; padding-inline: 2px; }
+  .result-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
   .result strong { font-size: 11px; letter-spacing: -.01em; }
   .result textarea { width: 100%; min-height: 78px; field-sizing: content; resize: vertical; padding: 11px 12px; border: 1px solid #deddd6; border-radius: 9px; outline: 0; background: #fffdfa; color: #171816; font-size: 12px; line-height: 1.55; box-shadow: inset 0 1px 2px rgba(35,34,29,.025); }
   .result textarea:hover { border-color: #cbc9c0; }
@@ -111,6 +113,7 @@ export function InlinePanel({
   const [error, setError] = useState<string>();
   const [copyStatus, setCopyStatus] = useState<string>();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number>();
   const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
   const [lastHistoryId, setLastHistoryId] = useState<string>();
   const activeRequestId = useRef<string | undefined>(undefined);
@@ -201,6 +204,7 @@ export function InlinePanel({
     const requestId = createRequestId();
     activeRequestId.current = requestId;
     setIsGenerating(true);
+    setRegeneratingIndex(undefined);
     setError(undefined);
     try {
       const input = buildInput();
@@ -229,7 +233,84 @@ export function InlinePanel({
     }
     activeRequestId.current = undefined;
     setIsGenerating(false);
+    setRegeneratingIndex(undefined);
     void sendInlineRequest({ type: "inline.cancel", targetRequestId }).catch(() => undefined);
+  };
+
+  const regenerateItem = async (index: number) => {
+    if (!result || !lastGenerationInput) {
+      return;
+    }
+    const currentTexts =
+      result.format === "candidates"
+        ? result.candidates.map((item) => item.text)
+        : result.format === "raw"
+          ? [result.rawText]
+          : [];
+    if (index < 0 || index >= currentTexts.length) {
+      return;
+    }
+    const requestId = createRequestId();
+    activeRequestId.current = requestId;
+    setIsGenerating(true);
+    setRegeneratingIndex(index);
+    setError(undefined);
+    try {
+      const replacement = await sendInlineRequest(
+        {
+          type: "inline.regenerate",
+          input: {
+            input: lastGenerationInput,
+            target: { kind: "candidate", index, currentTexts },
+          },
+        },
+        { requestId },
+      );
+      if (activeRequestId.current !== requestId) {
+        return;
+      }
+      const nextResult: GenerationResult =
+        result.format === "candidates"
+          ? {
+              ...result,
+              provider: replacement.provider,
+              model: replacement.model,
+              candidates: result.candidates.map((item, itemIndex) =>
+                itemIndex === index ? { ...item, text: replacement.text } : item,
+              ),
+            }
+          : result.format === "raw"
+            ? {
+                ...result,
+                provider: replacement.provider,
+                model: replacement.model,
+                rawText: replacement.text,
+              }
+            : result;
+      const refreshed = refreshLengthWarnings(nextResult, lastGenerationInput);
+      setResult(refreshed);
+      if (lastHistoryId) {
+        try {
+          await sendInlineRequest({
+            type: "inline.history.sync",
+            historyId: lastHistoryId,
+            result: refreshed,
+          });
+        } catch {
+          setCopyStatus(copy.inlineHistorySyncWarning);
+        }
+      }
+    } catch (generationError) {
+      if (activeRequestId.current === requestId) {
+        setError(getErrorCopy(generationError, copy));
+      }
+    } finally {
+      if (activeRequestId.current === requestId) {
+        activeRequestId.current = undefined;
+        setIsGenerating(false);
+        setRegeneratingIndex(undefined);
+      }
+    }
   };
 
   const openSidePanel = async () => {
@@ -433,14 +514,31 @@ export function InlinePanel({
               <article className="result" key={item.id}>
                 <div className="result-heading">
                   <strong>{copy.inlineResultLabel.replace("{number}", String(index + 1))}</strong>
-                  <button
-                    type="button"
-                    className="secondary result-copy"
-                    onClick={() => copyText(item.text)}
-                  >
-                    <Copy size={14} aria-hidden="true" />
-                    {copy.copyText}
-                  </button>
+                  <span className="result-actions">
+                    <button
+                      type="button"
+                      className="secondary result-copy"
+                      onClick={() =>
+                        regeneratingIndex === index ? cancel() : regenerateItem(index)
+                      }
+                      disabled={isGenerating && regeneratingIndex !== index}
+                    >
+                      {regeneratingIndex === index ? (
+                        <StopCircle size={14} aria-hidden="true" />
+                      ) : (
+                        <ArrowsClockwise size={14} aria-hidden="true" />
+                      )}
+                      {regeneratingIndex === index ? copy.inlineCancel : copy.regenerateItem}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary result-copy"
+                      onClick={() => copyText(item.text)}
+                    >
+                      <Copy size={14} aria-hidden="true" />
+                      {copy.copyText}
+                    </button>
+                  </span>
                 </div>
                 <textarea
                   aria-label={copy.inlineResultLabel.replace("{number}", String(index + 1))}

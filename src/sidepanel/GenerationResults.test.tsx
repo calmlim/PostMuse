@@ -138,8 +138,9 @@ describe("GenerationResults", () => {
     expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
   });
 
-  it("offers full regeneration without per-candidate regeneration", () => {
+  it("offers full and per-candidate regeneration", () => {
     const onRegenerateAll = vi.fn();
+    const onRegenerateItem = vi.fn();
     const result = {
       format: "candidates" as const,
       contentType: "reply" as const,
@@ -159,12 +160,73 @@ describe("GenerationResults", () => {
         result={result}
         onChange={vi.fn()}
         onRegenerateAll={onRegenerateAll}
+        onRegenerateItem={onRegenerateItem}
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Regenerate" })[1]);
+    expect(onRegenerateItem).toHaveBeenCalledWith("candidate", 1);
     fireEvent.click(screen.getByRole("button", { name: "Regenerate all" }));
     expect(onRegenerateAll).toHaveBeenCalledOnce();
     expect(screen.getByLabelText("Candidate 1")).toHaveValue("Keep one");
+  });
+
+  it("targets thread posts and turns the active item action into cancel", () => {
+    const onRegenerateItem = vi.fn();
+    const onCancelRegeneration = vi.fn();
+    render(
+      <GenerationResults
+        copy={getMessages("en")}
+        result={{
+          format: "thread",
+          contentType: "thread",
+          threads: [
+            {
+              id: "thread-1",
+              posts: [
+                { id: "post-1", text: "Opening" },
+                { id: "post-2", text: "Middle" },
+              ],
+            },
+          ],
+          warnings: [],
+          provider: "xai",
+          model: "grok-test",
+          softCharacterLimit: 280,
+        }}
+        onChange={vi.fn()}
+        onRegenerateItem={onRegenerateItem}
+        onCancelRegeneration={onCancelRegeneration}
+        regeneratingTarget={{ kind: "thread-post", index: 1 }}
+        isRegenerating
+      />,
+    );
+
+    expect(screen.getAllByRole("button", { name: "Regenerate" })[0]).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancelRegeneration).toHaveBeenCalledOnce();
+  });
+
+  it("offers targeted regeneration for raw fallback text", () => {
+    const onRegenerateItem = vi.fn();
+    render(
+      <GenerationResults
+        copy={getMessages("en")}
+        result={{
+          format: "raw",
+          contentType: "long-post",
+          rawText: "Fallback text",
+          warnings: ["RAW_TEXT_FALLBACK"],
+          provider: "anthropic",
+          model: "claude-test",
+          softCharacterLimit: 25_000,
+        }}
+        onChange={vi.fn()}
+        onRegenerateItem={onRegenerateItem}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(onRegenerateItem).toHaveBeenCalledWith("candidate", 0);
   });
 });

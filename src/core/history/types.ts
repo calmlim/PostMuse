@@ -126,6 +126,7 @@ const isImageHistoryMetadata = (value: unknown): value is ImageHistoryMetadata =
     (typeof value.pixelHeight === "number" &&
       Number.isInteger(value.pixelHeight) &&
       value.pixelHeight > 0)) &&
+  (value.input === undefined || isImageGenerationInput(value.input)) &&
   isIsoDate(value.generatedAt);
 
 export const isHistoryRecordV1 = (value: unknown): value is HistoryRecordV1 =>

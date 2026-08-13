@@ -21,6 +21,7 @@ import type {
 } from "../core/generation/types";
 import { getCustomLengthBounds } from "../core/generation/types";
 import { getRecommendedMaxOutputTokens } from "../core/generation/length";
+import { refreshLengthWarnings } from "../core/generation/result-warnings";
 import {
   isOutputLanguageId,
   OUTPUT_LANGUAGE_OPTIONS,
@@ -58,6 +59,7 @@ interface CreatePanelProps {
   promptRevision: number;
   historyRevision: number;
   historyDraft?: { requestId: string; input: GenerationInput };
+  imageHistoryDraft?: { requestId: string; input: ImageGenerationInput };
   onHistoryChanged: () => void;
 }
 
@@ -162,6 +164,7 @@ export function CreatePanel({
   promptRevision,
   historyRevision,
   historyDraft,
+  imageHistoryDraft,
   onHistoryChanged,
 }: CreatePanelProps) {
   const [form, setForm] = useState<DraftForm>(initialForm);
@@ -177,11 +180,27 @@ export function CreatePanel({
   const [rawHistorySaved, setRawHistorySaved] = useState(false);
   const [lastGenerationInput, setLastGenerationInput] = useState<GenerationInput>();
   const [lastHistoryId, setLastHistoryId] = useState<string>();
+  const [reusedImageInput, setReusedImageInput] = useState<ImageGenerationInput>();
+  const [regeneratingTarget, setRegeneratingTarget] = useState<{
+    kind: "candidate" | "thread-post";
+    index: number;
+  }>();
   const [creationPreferences, setCreationPreferences] = useState(
     createDefaultCreationPreferences(),
   );
   const activeRequestId = useRef<string | undefined>(undefined);
   const hasUserEditedRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      const targetRequestId = activeRequestId.current;
+      if (targetRequestId) {
+        activeRequestId.current = undefined;
+        void sendExtensionRequest({ type: "text.cancel", targetRequestId }).catch(() => undefined);
+      }
+    },
+    [],
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revisions are explicit reload signals.
   useEffect(() => {
@@ -244,6 +263,8 @@ export function CreatePanel({
       return;
     }
     const { input } = historyDraft;
+    setCreateMode("text");
+    setReusedImageInput(undefined);
     hasUserEditedRef.current = true;
     const knownLanguage = input.language.value;
     const languageValue: DraftForm["languageValue"] =
@@ -276,9 +297,19 @@ export function CreatePanel({
     setLastGenerationInput(undefined);
     setLastHistoryId(undefined);
     setRawHistorySaved(false);
+    setRegeneratingTarget(undefined);
     setError(input.source.text.length > MAX_SOURCE_CHARACTERS ? copy.sourceLengthError : undefined);
     setFileName(undefined);
   }, [historyDraft?.requestId]);
+
+  useEffect(() => {
+    if (!imageHistoryDraft) {
+      return;
+    }
+    setReusedImageInput(structuredClone(imageHistoryDraft.input));
+    setCreateMode("image");
+    setError(undefined);
+  }, [imageHistoryDraft]);
 
   const updateForm = <K extends keyof DraftForm>(key: K, value: DraftForm[K]) => {
     hasUserEditedRef.current = true;
@@ -393,6 +424,7 @@ export function CreatePanel({
     }
 
     setIsGenerating(true);
+    setRegeneratingTarget(undefined);
     setError(undefined);
     const requestId = createRequestId();
     activeRequestId.current = requestId;
@@ -490,6 +522,112 @@ export function CreatePanel({
     await performFullGeneration(lastGenerationInput);
   };
 
+  const regenerateItem = async (kind: "candidate" | "thread-post", index: number) => {
+    if (!profile || !isConfigured || !lastGenerationInput || !result) {
+      onOpenSettings();
+      return;
+    }
+    const currentTexts =
+      result.format === "candidates"
+        ? result.candidates.map((item) => item.text)
+        : result.format === "thread"
+          ? (result.threads[0]?.posts.map((item) => item.text) ?? [])
+          : [result.rawText];
+    if (index < 0 || index >= currentTexts.length) {
+      return;
+    }
+
+    let permissionPromise: Promise<boolean>;
+    try {
+      permissionPromise = requestProviderOriginPermission(profile.baseUrl);
+    } catch (permissionError) {
+      setError(getFriendlyError(permissionError, copy));
+      return;
+    }
+
+    const requestId = createRequestId();
+    activeRequestId.current = requestId;
+    setIsGenerating(true);
+    setRegeneratingTarget({ kind, index });
+    setError(undefined);
+    try {
+      const allowed = await permissionPromise;
+      if (!allowed) {
+        throw Object.assign(new Error(copy.errorPermissionRequired), {
+          name: "HOST_PERMISSION_REQUIRED",
+        });
+      }
+      if (activeRequestId.current !== requestId) {
+        return;
+      }
+      const replacement = await sendExtensionRequest(
+        {
+          type: "text.regenerate",
+          input: {
+            input: lastGenerationInput,
+            target: { kind, index, currentTexts },
+          },
+        },
+        { requestId },
+      );
+      if (activeRequestId.current !== requestId) {
+        return;
+      }
+      const nextResult: GenerationResult =
+        result.format === "candidates"
+          ? {
+              ...result,
+              provider: replacement.provider,
+              model: replacement.model,
+              candidates: result.candidates.map((item, itemIndex) =>
+                itemIndex === index ? { ...item, text: replacement.text } : item,
+              ),
+            }
+          : result.format === "thread"
+            ? {
+                ...result,
+                provider: replacement.provider,
+                model: replacement.model,
+                threads: result.threads.map((thread, threadIndex) =>
+                  threadIndex === 0
+                    ? {
+                        ...thread,
+                        posts: thread.posts.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, text: replacement.text } : item,
+                        ),
+                      }
+                    : thread,
+                ),
+              }
+            : {
+                ...result,
+                provider: replacement.provider,
+                model: replacement.model,
+                rawText: replacement.text,
+              };
+      const refreshed = refreshLengthWarnings(nextResult, lastGenerationInput);
+      setResult(refreshed);
+      if (lastHistoryId) {
+        try {
+          await updateHistoryResult(lastHistoryId, refreshed);
+          onHistoryChanged();
+        } catch {
+          setError(copy.historySaveError);
+        }
+      }
+    } catch (generationError) {
+      if (activeRequestId.current === requestId) {
+        setError(getFriendlyError(generationError, copy));
+      }
+    } finally {
+      if (activeRequestId.current === requestId) {
+        activeRequestId.current = undefined;
+        setIsGenerating(false);
+        setRegeneratingTarget(undefined);
+      }
+    }
+  };
+
   const syncHistoryOnCopy = async (currentResult: GenerationResult) => {
     if (!lastHistoryId) {
       return;
@@ -530,13 +668,13 @@ export function CreatePanel({
     }
     try {
       if (lastHistoryId) {
-        await updateHistoryMedia(lastHistoryId, imageResult);
+        await updateHistoryMedia(lastHistoryId, imageInput, imageResult);
       } else {
         await saveImageHistoryRecord(imageInput, imageResult);
       }
       onHistoryChanged();
     } catch {
-      setError(copy.historySaveError);
+      throw new Error(copy.historySaveError);
     }
   };
 
@@ -551,7 +689,7 @@ export function CreatePanel({
       await saveImageHistoryRecord(imageInput, imageResult);
       onHistoryChanged();
     } catch {
-      setError(copy.historySaveError);
+      throw new Error(copy.historySaveError);
     }
   };
 
@@ -562,6 +700,7 @@ export function CreatePanel({
     }
     activeRequestId.current = undefined;
     setIsGenerating(false);
+    setRegeneratingTarget(undefined);
     setError(copy.generationCancelled);
     void sendExtensionRequest({ type: "text.cancel", targetRequestId }).catch(() => undefined);
   };
@@ -603,7 +742,10 @@ export function CreatePanel({
           type="button"
           data-active={createMode === "image"}
           aria-pressed={createMode === "image"}
-          onClick={() => setCreateMode("image")}
+          onClick={() => {
+            setReusedImageInput(undefined);
+            setCreateMode("image");
+          }}
         >
           <ImageSquare size={17} weight="bold" aria-hidden="true" />
           {copy.createImageMode}
@@ -976,6 +1118,7 @@ export function CreatePanel({
           onOpenSettings={onOpenSettings}
           onClose={() => setCreateMode("text")}
           mode="standalone"
+          initialInput={reusedImageInput}
           onGenerated={saveStandaloneImage}
         />
       )}
@@ -993,6 +1136,9 @@ export function CreatePanel({
           onImageGenerated={saveCompanionImage}
           onCopied={syncHistoryOnCopy}
           onRegenerateAll={regenerateAll}
+          onRegenerateItem={regenerateItem}
+          onCancelRegeneration={cancelGeneration}
+          regeneratingTarget={regeneratingTarget}
           isRegenerating={isGenerating}
         />
       ) : null}

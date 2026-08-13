@@ -14,6 +14,7 @@ describe("local diagnostics", () => {
         activeImageSecretStatus: { hasKey: false },
       },
       historyCount: 12,
+      historyImageBytes: 4_194_304,
       grantedOriginCount: 2,
       manifest: { version: "0.1.0", manifest_version: 3, content_scripts: [] },
     });
@@ -23,6 +24,7 @@ describe("local diagnostics", () => {
       textProvider: "openai-compatible",
       textKeyStored: true,
       historyCount: 12,
+      historyImageBytes: 4_194_304,
       xInlineBuild: false,
     });
     expect(JSON.stringify(diagnostics)).not.toContain("private-model-name");

@@ -1,6 +1,7 @@
 import type {
   ImageProviderProfile,
   ConnectionTestResult,
+  GrantedProviderPermissionSummary,
   ProviderPermissionSummary,
   ProviderProfile,
   SettingsSnapshot,
@@ -30,6 +31,7 @@ export const MESSAGE_TYPES = [
   "image.generate",
   "image.cancel",
   "data.deleteKeys",
+  "data.getProviderAccess",
   "data.revokeOrigins",
   "data.reset",
   "inline.bootstrap",
@@ -63,6 +65,7 @@ export type ExtensionRequest =
   | { type: "image.generate"; requestId: string; input: ImageGenerationInput }
   | { type: "image.cancel"; requestId: string; targetRequestId: string }
   | { type: "data.deleteKeys"; requestId: string }
+  | { type: "data.getProviderAccess"; requestId: string }
   | { type: "data.revokeOrigins"; requestId: string }
   | { type: "data.reset"; requestId: string }
   | { type: "inline.bootstrap"; requestId: string }
@@ -123,6 +126,7 @@ export interface ExtensionResponseMap {
   "image.generate": ImageGenerationResult;
   "image.cancel": { cancelled: boolean };
   "data.deleteKeys": SettingsSnapshot;
+  "data.getProviderAccess": GrantedProviderPermissionSummary;
   "data.revokeOrigins": ProviderPermissionSummary;
   "data.reset": { snapshot: SettingsSnapshot; remainingOriginCount: number };
   "inline.bootstrap": InlineBootstrap;
@@ -149,6 +153,7 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
   if (
     value.type === "settings.get" ||
     value.type === "data.deleteKeys" ||
+    value.type === "data.getProviderAccess" ||
     value.type === "data.revokeOrigins" ||
     value.type === "data.reset" ||
     value.type === "inline.bootstrap"

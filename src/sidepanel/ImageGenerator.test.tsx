@@ -128,4 +128,112 @@ describe("ImageGenerator", () => {
       ),
     );
   });
+
+  it("restores complete settings for an image-history draft without generating", () => {
+    const settings = createDefaultSettings();
+    render(
+      <ImageGenerator
+        copy={getMessages("en")}
+        sourceText=""
+        snapshot={{
+          settings,
+          activeSecretStatus: { hasKey: false },
+          activeImageSecretStatus: { hasKey: true, persistence: "session" },
+        }}
+        onOpenSettings={vi.fn()}
+        onClose={vi.fn()}
+        mode="standalone"
+        initialInput={{
+          sourceText: "A restored paper boat",
+          prompt: "Previously expanded Provider prompt",
+          style: "illustration",
+          aspectRatio: "16:9",
+          size: "2K",
+          includeText: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText("Image description")).toHaveValue("A restored paper boat");
+    expect(screen.getByLabelText("Visual style")).toHaveValue("illustration");
+    expect(screen.getByLabelText("Aspect ratio")).toHaveValue("16:9");
+    expect(screen.getByLabelText("Resolution")).toHaveValue("2K");
+    expect(
+      screen.getByRole("checkbox", { name: "Allow short text inside the image" }),
+    ).toBeChecked();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps the image preview and reports a non-blocking history save failure", async () => {
+    sendMessage.mockResolvedValue({
+      ok: true,
+      data: {
+        provider: "openai",
+        model: "gpt-image-2",
+        prompt: "Saved image prompt",
+        aspectRatio: "1:1",
+        size: "1K",
+        mimeType: "image/png",
+        base64Data: "aW1hZ2U=",
+      },
+    });
+    const settings = createDefaultSettings();
+    render(
+      <ImageGenerator
+        copy={getMessages("en")}
+        sourceText="A useful lesson"
+        snapshot={{
+          settings,
+          activeSecretStatus: { hasKey: false },
+          activeImageSecretStatus: { hasKey: true, persistence: "session" },
+        }}
+        onOpenSettings={vi.fn()}
+        onClose={vi.fn()}
+        onGenerated={vi.fn().mockRejectedValue(new Error("IndexedDB failed"))}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate image" }));
+    expect(await screen.findByRole("img", { name: "Image ready" })).toBeVisible();
+    expect(
+      screen.getByText("The result is ready, but it could not be saved to local history."),
+    ).toBeVisible();
+  });
+
+  it("cancels an active request when the image panel closes", async () => {
+    let resolveGeneration: ((value: unknown) => void) | undefined;
+    sendMessage.mockImplementation((request: { type: string }) =>
+      request.type === "image.generate"
+        ? new Promise((resolve) => {
+            resolveGeneration = resolve;
+          })
+        : Promise.resolve({ ok: true, data: { cancelled: true } }),
+    );
+    const settings = createDefaultSettings();
+    const onClose = vi.fn();
+    render(
+      <ImageGenerator
+        copy={getMessages("en")}
+        sourceText="A useful lesson"
+        snapshot={{
+          settings,
+          activeSecretStatus: { hasKey: false },
+          activeImageSecretStatus: { hasKey: true, persistence: "session" },
+        }}
+        onOpenSettings={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate image" }));
+    await waitFor(() =>
+      expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "image.generate" })),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close PostMuse" }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "image.cancel", targetRequestId: expect.any(String) }),
+    );
+    resolveGeneration?.({ ok: false, error: { code: "REQUEST_CANCELLED", message: "cancelled" } });
+  });
 });
