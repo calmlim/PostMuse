@@ -2,6 +2,7 @@ import {
   ArrowCounterClockwise,
   Check,
   Copy,
+  DownloadSimple,
   MagnifyingGlass,
   PencilSimple,
   Trash,
@@ -10,13 +11,20 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import type { GenerationInput, GenerationResult } from "../core/generation/types";
-import { getHistoryResultText, type HistoryRecordV1 } from "../core/history/types";
+import {
+  getHistoryResultText,
+  type HistoryRecord,
+  type HistoryRecordV1,
+  isImageHistoryRecordV2,
+} from "../core/history/types";
+import type { ImageHistoryMetadata } from "../core/image/types";
 import type { Locale, Messages } from "../i18n";
 import { loadHistoryEnabled, saveHistoryEnabled } from "../storage/history-preferences";
 import {
   clearHistoryRecords,
   deleteHistoryRecord,
   listHistoryRecords,
+  loadHistoryImageBlob,
   updateHistoryResult,
 } from "../storage/history-repository";
 import { GenerationResults } from "./GenerationResults";
@@ -35,7 +43,10 @@ interface HistoryEditor {
   input: GenerationInput;
 }
 
-const getContentTypeLabel = (record: HistoryRecordV1, copy: Messages): string => {
+const getContentTypeLabel = (record: HistoryRecord, copy: Messages): string => {
+  if (isImageHistoryRecordV2(record)) {
+    return copy.createImageMode;
+  }
   const labels: Record<GenerationInput["contentType"], string> = {
     post: copy.contentTypePost,
     reply: copy.contentTypeReply,
@@ -46,6 +57,61 @@ const getContentTypeLabel = (record: HistoryRecordV1, copy: Messages): string =>
   return labels[record.input.contentType];
 };
 
+interface HistoryImagePreviewProps {
+  historyId: string;
+  metadata: ImageHistoryMetadata;
+  copy: Messages;
+}
+
+function HistoryImagePreview({ historyId, metadata, copy }: HistoryImagePreviewProps) {
+  const [objectUrl, setObjectUrl] = useState<string>();
+
+  useEffect(() => {
+    let active = true;
+    let nextUrl: string | undefined;
+    void loadHistoryImageBlob(historyId)
+      .then((blob) => {
+        if (active && blob) {
+          nextUrl = URL.createObjectURL(blob);
+          setObjectUrl(nextUrl);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      if (nextUrl) {
+        URL.revokeObjectURL(nextUrl);
+      }
+    };
+  }, [historyId]);
+
+  if (!objectUrl) {
+    return null;
+  }
+  const extension = metadata.mimeType === "image/jpeg" ? "jpg" : metadata.mimeType.split("/")[1];
+  return (
+    <figure className="history-image-preview">
+      <img src={objectUrl} alt={copy.imageReady} />
+      <figcaption>
+        <span>
+          {metadata.aspectRatio} · {metadata.size}
+          {metadata.pixelWidth && metadata.pixelHeight
+            ? ` · ${metadata.pixelWidth}×${metadata.pixelHeight}`
+            : ""}
+        </span>
+        <a
+          className="secondary-button"
+          href={objectUrl}
+          download={`postmuse-history-${historyId}.${extension}`}
+        >
+          <DownloadSimple size={15} aria-hidden="true" />
+          {copy.downloadImage}
+        </a>
+      </figcaption>
+    </figure>
+  );
+}
+
 export function HistoryPanel({
   copy,
   locale,
@@ -53,7 +119,7 @@ export function HistoryPanel({
   onHistoryChanged,
   onReuseInput,
 }: HistoryPanelProps) {
-  const [records, setRecords] = useState<HistoryRecordV1[]>([]);
+  const [records, setRecords] = useState<HistoryRecord[]>([]);
   const [enabled, setEnabled] = useState(true);
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState<HistoryEditor>();
@@ -86,11 +152,12 @@ export function HistoryPanel({
     if (!normalized) {
       return records;
     }
-    return records.filter((record) =>
-      `${record.input.source.text}\n${getHistoryResultText(record.result)}`
-        .toLocaleLowerCase(locale)
-        .includes(normalized),
-    );
+    return records.filter((record) => {
+      const searchable = isImageHistoryRecordV2(record)
+        ? `${record.input.sourceText}\n${record.input.prompt}`
+        : `${record.input.source.text}\n${getHistoryResultText(record.result)}`;
+      return searchable.toLocaleLowerCase(locale).includes(normalized);
+    });
   }, [locale, query, records]);
 
   const toggleEnabled = async () => {
@@ -109,6 +176,15 @@ export function HistoryPanel({
   const copyRecord = async (record: HistoryRecordV1) => {
     try {
       await navigator.clipboard.writeText(getHistoryResultText(record.result));
+      setFeedback({ kind: "success", text: copy.historyCopied });
+    } catch {
+      setFeedback({ kind: "error", text: copy.copyFailed });
+    }
+  };
+
+  const copyImageDescription = async (description: string) => {
+    try {
+      await navigator.clipboard.writeText(description);
       setFeedback({ kind: "success", text: copy.historyCopied });
     } catch {
       setFeedback({ kind: "error", text: copy.copyFailed });
@@ -236,93 +312,132 @@ export function HistoryPanel({
         </section>
       ) : (
         <div className="history-list">
-          {filteredRecords.map((record) => (
-            <article className="history-card" key={record.id}>
-              <div className="history-card-heading">
-                <div>
-                  <strong>{getContentTypeLabel(record, copy)}</strong>
-                  <span>
-                    {new Intl.DateTimeFormat(locale, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    }).format(new Date(record.updatedAt))}
+          {filteredRecords.map((record) => {
+            const isImageRecord = isImageHistoryRecordV2(record);
+            return (
+              <article className="history-card" key={record.id}>
+                <div className="history-card-heading">
+                  <div>
+                    <strong>{getContentTypeLabel(record, copy)}</strong>
+                    <span>
+                      {new Intl.DateTimeFormat(locale, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }).format(new Date(record.updatedAt))}
+                    </span>
+                  </div>
+                  <span className="provider-chip">
+                    {record.result.provider} · {record.result.model}
                   </span>
                 </div>
-                <span className="provider-chip">
-                  {record.result.provider} · {record.result.model}
-                </span>
-              </div>
-              <div className="history-preview">
-                <span>{copy.historySourceLabel}</span>
-                <p>{record.input.source.text}</p>
-              </div>
-              <div className="history-preview">
-                <span>{copy.historyResultLabel}</span>
-                <p>{getHistoryResultText(record.result)}</p>
-              </div>
-              <div className="history-actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() =>
-                    setEditor({
-                      id: record.id,
-                      result: structuredClone(record.result),
-                      input: structuredClone(record.input),
-                    })
-                  }
-                >
-                  <PencilSimple size={15} aria-hidden="true" />
-                  {copy.historyOpen}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => copyRecord(record)}
-                >
-                  <Copy size={15} aria-hidden="true" />
-                  {copy.copyText}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => onReuseInput(structuredClone(record.input))}
-                >
-                  <ArrowCounterClockwise size={15} aria-hidden="true" />
-                  {copy.historyReuse}
-                </button>
-                {deleteId === record.id ? (
-                  <span className="inline-confirm">
-                    <small>{copy.historyDeleteConfirm}</small>
+                {isImageRecord ? (
+                  <>
+                    <HistoryImagePreview
+                      historyId={record.id}
+                      metadata={record.result}
+                      copy={copy}
+                    />
+                    <div className="history-preview">
+                      <span>{copy.imageDescriptionLabel}</span>
+                      <p>{record.input.sourceText}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {record.media ? (
+                      <HistoryImagePreview
+                        historyId={record.id}
+                        metadata={record.media}
+                        copy={copy}
+                      />
+                    ) : null}
+                    <div className="history-preview">
+                      <span>{copy.historySourceLabel}</span>
+                      <p>{record.input.source.text}</p>
+                    </div>
+                    <div className="history-preview">
+                      <span>{copy.historyResultLabel}</span>
+                      <p>{getHistoryResultText(record.result)}</p>
+                    </div>
+                  </>
+                )}
+                <div className="history-actions">
+                  {isImageRecord ? (
                     <button
                       type="button"
-                      className="danger-button"
-                      onClick={() => deleteRecord(record.id)}
+                      className="secondary-button"
+                      onClick={() => copyImageDescription(record.input.sourceText)}
                     >
+                      <Copy size={15} aria-hidden="true" />
+                      {copy.copyText}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() =>
+                          setEditor({
+                            id: record.id,
+                            result: structuredClone(record.result),
+                            input: structuredClone(record.input),
+                          })
+                        }
+                      >
+                        <PencilSimple size={15} aria-hidden="true" />
+                        {copy.historyOpen}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => copyRecord(record)}
+                      >
+                        <Copy size={15} aria-hidden="true" />
+                        {copy.copyText}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => onReuseInput(structuredClone(record.input))}
+                      >
+                        <ArrowCounterClockwise size={15} aria-hidden="true" />
+                        {copy.historyReuse}
+                      </button>
+                    </>
+                  )}
+                  {deleteId === record.id ? (
+                    <span className="inline-confirm">
+                      <small>{copy.historyDeleteConfirm}</small>
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() => deleteRecord(record.id)}
+                      >
+                        {copy.historyDelete}
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={copy.cancelPromptEdit}
+                        onClick={() => setDeleteId(undefined)}
+                      >
+                        <X size={15} aria-hidden="true" />
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="history-delete-button"
+                      onClick={() => setDeleteId(record.id)}
+                    >
+                      <Trash size={15} aria-hidden="true" />
                       {copy.historyDelete}
                     </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label={copy.cancelPromptEdit}
-                      onClick={() => setDeleteId(undefined)}
-                    >
-                      <X size={15} aria-hidden="true" />
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="history-delete-button"
-                    onClick={() => setDeleteId(record.id)}
-                  >
-                    <Trash size={15} aria-hidden="true" />
-                    {copy.historyDelete}
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 

@@ -8,10 +8,11 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRequestId } from "../core/contracts/messages";
+import { imageResultToBlob } from "../core/image/blob";
 import { buildImagePrompt, buildStandaloneImagePrompt } from "../core/image/prompt-builder";
 import { MAX_IMAGE_DESCRIPTION_LENGTH, MAX_IMAGE_PROMPT_LENGTH } from "../core/image/validation";
 import { supportsOpenAIExactDimensions } from "../core/image/dimensions";
-import type { ImageGenerationResult, ImageHistoryMetadata, ImageStyle } from "../core/image/types";
+import type { ImageGenerationInput, ImageGenerationResult, ImageStyle } from "../core/image/types";
 import type { SettingsSnapshot } from "../core/settings/types";
 import type { Messages } from "../i18n";
 import { requestProviderOriginPermission, sendExtensionRequest } from "./extension-client";
@@ -22,7 +23,7 @@ interface ImageGeneratorProps {
   snapshot?: SettingsSnapshot;
   onOpenSettings: () => void;
   onClose: () => void;
-  onGenerated?: (metadata: ImageHistoryMetadata) => void;
+  onGenerated?: (result: ImageGenerationResult, input: ImageGenerationInput) => void;
   mode?: "companion" | "standalone";
 }
 
@@ -48,15 +49,6 @@ const getFriendlyImageError = (error: unknown, copy: Messages): string => {
     REQUEST_CANCELLED: copy.generationCancelled,
   };
   return localized[error.name] ?? error.message ?? copy.imageErrorGeneric;
-};
-
-export const imageResultToBlob = (result: ImageGenerationResult): Blob => {
-  const binary = atob(result.base64Data);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return new Blob([bytes], { type: result.mimeType });
 };
 
 export function ImageGenerator({
@@ -159,34 +151,26 @@ export function ImageGenerator({
         return;
       }
       const trimmedPrompt = prompt.trim();
+      const generationInput: ImageGenerationInput = {
+        sourceText: isStandalone ? trimmedPrompt : sourceText,
+        prompt: isStandalone
+          ? buildStandaloneImagePrompt(trimmedPrompt, style, includeText)
+          : trimmedPrompt,
+        style,
+        aspectRatio,
+        size,
+        includeText,
+      };
       const generated = await sendExtensionRequest(
         {
           type: "image.generate",
-          input: {
-            sourceText: isStandalone ? trimmedPrompt : sourceText,
-            prompt: isStandalone
-              ? buildStandaloneImagePrompt(trimmedPrompt, style, includeText)
-              : trimmedPrompt,
-            style,
-            aspectRatio,
-            size,
-            includeText,
-          },
+          input: generationInput,
         },
         { requestId },
       );
       if (activeRequestId.current === requestId) {
         setResult(generated);
-        onGenerated?.({
-          type: "image",
-          provider: generated.provider,
-          model: generated.model,
-          prompt: generated.prompt,
-          aspectRatio: generated.aspectRatio,
-          size: generated.size,
-          mimeType: generated.mimeType,
-          generatedAt: new Date().toISOString(),
-        });
+        onGenerated?.(generated, generationInput);
       }
     } catch (generationError) {
       if (activeRequestId.current === requestId) {

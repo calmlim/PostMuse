@@ -76,7 +76,9 @@ amount.
 - Drafts, selected visible X content, prompts, and generated media are sent directly from the
   extension to the Provider chosen by the user, and only after an explicit action.
 - Local history uses IndexedDB and can be disabled, cleared, or deleted record by record.
-- Generated image bytes remain in the current UI session; history stores image metadata only.
+- When local history is enabled, generated images and their metadata are stored only in IndexedDB
+  in this browser so they can be previewed and downloaded again. Disabling history stops new saves;
+  deleting or clearing history removes the corresponding local image bytes.
 - PostMuse does not request X OAuth, collect an X account, analyze an account, or publish content.
 
 Each AI Provider has its own billing, retention, training, safety, and regional policies. Review the

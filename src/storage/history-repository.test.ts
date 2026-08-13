@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createGenerationInputFixture } from "../core/generation/fixtures";
 import type { GenerationResult } from "../core/generation/types";
+import { isHistoryRecordV1, isImageHistoryRecordV2 } from "../core/history/types";
+import type { ImageGenerationInput, ImageGenerationResult } from "../core/image/types";
 import {
   clearHistoryRecords,
   deleteHistoryRecord,
   listHistoryRecords,
+  loadHistoryImageBlob,
   saveHistoryRecord,
+  saveImageHistoryRecord,
   updateHistoryMedia,
   updateHistoryResult,
 } from "./history-repository";
@@ -19,6 +23,27 @@ const resultFixture = (text: string): GenerationResult => ({
   model: "test-model",
   softCharacterLimit: 280,
 });
+
+const imageInputFixture: ImageGenerationInput = {
+  sourceText: "A clean companion image",
+  prompt: "A clean companion image",
+  style: "editorial",
+  aspectRatio: "1:1",
+  size: "1K",
+  includeText: false,
+};
+
+const imageResultFixture: ImageGenerationResult = {
+  provider: "openai",
+  model: "gpt-image-2",
+  prompt: "A clean companion image",
+  aspectRatio: "1:1",
+  size: "1K",
+  mimeType: "image/png",
+  base64Data: "aW1hZ2U=",
+  pixelWidth: 1024,
+  pixelHeight: 1024,
+};
 
 beforeEach(() => {
   let id = 0;
@@ -40,8 +65,9 @@ describe("history repository", () => {
 
     const records = await listHistoryRecords();
     expect(records).toHaveLength(100);
-    expect(records[0].input.source.text).toBe("Idea 100");
-    expect(records.at(-1)?.input.source.text).toBe("Idea 1");
+    const textRecords = records.filter(isHistoryRecordV1);
+    expect(textRecords[0].input.source.text).toBe("Idea 100");
+    expect(textRecords.at(-1)?.input.source.text).toBe("Idea 1");
   });
 
   it("persists edits across database reopen and sorts by updatedAt", async () => {
@@ -89,27 +115,38 @@ describe("history repository", () => {
     expect(await listHistoryRecords()).toEqual([]);
   });
 
-  it("stores image metadata without image binary data", async () => {
+  it("stores companion image metadata and binary locally", async () => {
     const record = await saveHistoryRecord(
       createGenerationInputFixture({ candidateCount: 1 }),
       resultFixture("Companion image source"),
       { recipeVersion: 1, styleTemplateVersion: 1 },
     );
 
-    await updateHistoryMedia(record.id, {
-      type: "image",
-      provider: "openai",
-      model: "gpt-image-2",
-      prompt: "A clean companion image",
-      aspectRatio: "1:1",
-      size: "1K",
-      mimeType: "image/png",
-      generatedAt: new Date().toISOString(),
-    });
+    await updateHistoryMedia(record.id, imageResultFixture);
 
     const stored = (await listHistoryRecords()).find((item) => item.id === record.id);
-    expect(stored?.media).toMatchObject({ provider: "openai", size: "1K" });
+    expect(stored && isHistoryRecordV1(stored) ? stored.media : undefined).toMatchObject({
+      provider: "openai",
+      size: "1K",
+      pixelWidth: 1024,
+    });
     expect(JSON.stringify(stored)).not.toContain("base64Data");
+    expect(await loadHistoryImageBlob(record.id)).toMatchObject({ size: 5, type: "image/png" });
+  });
+
+  it("stores standalone images as first-class history records", async () => {
+    const record = await saveImageHistoryRecord(imageInputFixture, imageResultFixture);
+    const stored = (await listHistoryRecords()).find((item) => item.id === record.id);
+
+    expect(stored && isImageHistoryRecordV2(stored) ? stored.input.sourceText : undefined).toBe(
+      "A clean companion image",
+    );
+    expect(stored?.result).toMatchObject({ provider: "openai", aspectRatio: "1:1" });
+    expect(JSON.stringify(stored)).not.toContain("base64Data");
+    expect(await loadHistoryImageBlob(record.id)).toMatchObject({ size: 5, type: "image/png" });
+
+    await deleteHistoryRecord(record.id);
+    expect(await loadHistoryImageBlob(record.id)).toBeUndefined();
   });
 
   it("rejects generated history items beyond the X long-post boundary", async () => {
@@ -154,7 +191,8 @@ describe("history repository", () => {
 
     const records = await listHistoryRecords();
     expect(records.length).toBeLessThan(18);
-    expect(records[0].input.source.text).toMatch(/^17-/);
-    expect(records.at(-1)?.input.source.text).not.toMatch(/^0-/);
+    const textRecords = records.filter(isHistoryRecordV1);
+    expect(textRecords[0].input.source.text).toMatch(/^17-/);
+    expect(textRecords.at(-1)?.input.source.text).not.toMatch(/^0-/);
   });
 });

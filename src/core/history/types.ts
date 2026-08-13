@@ -5,7 +5,13 @@ import {
   type GenerationResult,
 } from "../generation/types";
 import { isGenerationInput } from "../generation/validation";
-import { IMAGE_ASPECT_RATIOS, IMAGE_SIZES, type ImageHistoryMetadata } from "../image/types";
+import {
+  IMAGE_ASPECT_RATIOS,
+  IMAGE_SIZES,
+  type ImageGenerationInput,
+  type ImageHistoryMetadata,
+} from "../image/types";
+import { isImageGenerationInput } from "../image/validation";
 import { IMAGE_PROVIDER_IDS, PROVIDER_IDS } from "../settings/types";
 import { isRecordValue } from "../settings/validation";
 
@@ -28,6 +34,18 @@ export interface HistoryRecordV1 {
   };
   media?: ImageHistoryMetadata;
 }
+
+export interface ImageHistoryRecordV2 {
+  schemaVersion: 2;
+  kind: "image";
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  input: ImageGenerationInput;
+  result: ImageHistoryMetadata;
+}
+
+export type HistoryRecord = HistoryRecordV1 | ImageHistoryRecordV2;
 
 const isGeneratedText = (value: unknown): boolean =>
   isRecordValue(value) &&
@@ -100,6 +118,14 @@ const isImageHistoryMetadata = (value: unknown): value is ImageHistoryMetadata =
   (value.mimeType === "image/png" ||
     value.mimeType === "image/jpeg" ||
     value.mimeType === "image/webp") &&
+  (value.pixelWidth === undefined ||
+    (typeof value.pixelWidth === "number" &&
+      Number.isInteger(value.pixelWidth) &&
+      value.pixelWidth > 0)) &&
+  (value.pixelHeight === undefined ||
+    (typeof value.pixelHeight === "number" &&
+      Number.isInteger(value.pixelHeight) &&
+      value.pixelHeight > 0)) &&
   isIsoDate(value.generatedAt);
 
 export const isHistoryRecordV1 = (value: unknown): value is HistoryRecordV1 =>
@@ -121,6 +147,21 @@ export const isHistoryRecordV1 = (value: unknown): value is HistoryRecordV1 =>
   Number.isInteger(value.prompt.styleTemplateVersion) &&
   value.prompt.styleTemplateVersion >= 1 &&
   (value.media === undefined || isImageHistoryMetadata(value.media));
+
+export const isImageHistoryRecordV2 = (value: unknown): value is ImageHistoryRecordV2 =>
+  isRecordValue(value) &&
+  value.schemaVersion === 2 &&
+  value.kind === "image" &&
+  typeof value.id === "string" &&
+  value.id.length > 0 &&
+  value.id.length <= 100 &&
+  isIsoDate(value.createdAt) &&
+  isIsoDate(value.updatedAt) &&
+  isImageGenerationInput(value.input) &&
+  isImageHistoryMetadata(value.result);
+
+export const isHistoryRecord = (value: unknown): value is HistoryRecord =>
+  isHistoryRecordV1(value) || isImageHistoryRecordV2(value);
 
 export const getHistoryResultText = (result: GenerationResult): string => {
   if (result.format === "candidates") {

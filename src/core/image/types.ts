@@ -43,5 +43,7 @@ export interface ImageHistoryMetadata {
   aspectRatio: ImageAspectRatio;
   size: ImageSize;
   mimeType: ImageGenerationResult["mimeType"];
+  pixelWidth?: number;
+  pixelHeight?: number;
   generatedAt: string;
 }

@@ -4,6 +4,7 @@ import { createGenerationInputFixture } from "../core/generation/fixtures";
 import { createDefaultSettings } from "../core/settings/defaults";
 import { HISTORY_PREFERENCES_STORAGE_KEY } from "../storage/history-preferences";
 import { listHistoryRecords, saveHistoryRecord } from "../storage/history-repository";
+import { isImageHistoryRecordV2 } from "../core/history/types";
 import { PENDING_X_CONTEXT_STORAGE_KEY } from "../storage/pending-context";
 import { App } from "./App";
 
@@ -98,6 +99,129 @@ describe("Side Panel App", () => {
     expect(screen.getByLabelText("Image description")).toHaveValue("");
     expect(screen.queryByLabelText("Your idea or draft")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate image" })).toBeDisabled();
+  });
+
+  it("automatically saves a successful standalone image when history is enabled", async () => {
+    const settings = createDefaultSettings();
+    settings.imageProviderProfiles[0] = {
+      ...settings.imageProviderProfiles[0],
+      model: "gpt-image-2",
+    };
+    runtimeSendMessage.mockImplementation(async (request: { type: string }) => {
+      if (request.type === "settings.get") {
+        return {
+          ok: true,
+          data: {
+            settings,
+            activeSecretStatus: { hasKey: false },
+            activeImageSecretStatus: { hasKey: true, persistence: "session" },
+          },
+        };
+      }
+      if (request.type === "image.generate") {
+        return {
+          ok: true,
+          data: {
+            provider: "openai",
+            model: "gpt-image-2",
+            prompt: "A paper boat",
+            aspectRatio: "1:1",
+            size: "1K",
+            mimeType: "image/png",
+            base64Data: "aW1hZ2U=",
+            pixelWidth: 1024,
+            pixelHeight: 1024,
+          },
+        };
+      }
+      return { ok: true, data: { cancelled: true } };
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn().mockReturnValue("blob:history-image"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Create image" }));
+    fireEvent.change(await screen.findByLabelText("Image description"), {
+      target: { value: "A red paper boat" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate image" }));
+
+    await screen.findByRole("img", { name: "Image ready" });
+    await waitFor(async () => {
+      const records = await listHistoryRecords();
+      expect(records).toHaveLength(1);
+      expect(isImageHistoryRecordV2(records[0])).toBe(true);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    await screen.findByRole("heading", { name: "Revisit your drafts" }, { timeout: 3_000 });
+    await waitFor(() => expect(document.querySelector(".history-card")).not.toBeNull());
+    const historyCard = document.querySelector(".history-card") as HTMLElement;
+    expect(within(historyCard).getByText("Create image")).toBeVisible();
+    expect(within(historyCard).getByText("A red paper boat")).toBeVisible();
+    expect(
+      await within(historyCard).findByRole("link", { name: "Download image" }),
+    ).toHaveAttribute("href", "blob:history-image");
+  });
+
+  it("does not save a successful standalone image when history is disabled", async () => {
+    storageGet.mockImplementation(async (key?: string) =>
+      key === HISTORY_PREFERENCES_STORAGE_KEY
+        ? {
+            [HISTORY_PREFERENCES_STORAGE_KEY]: { schemaVersion: 1, enabled: false },
+          }
+        : {},
+    );
+    const settings = createDefaultSettings();
+    settings.imageProviderProfiles[0] = {
+      ...settings.imageProviderProfiles[0],
+      model: "gpt-image-2",
+    };
+    runtimeSendMessage.mockImplementation(async (request: { type: string }) => {
+      if (request.type === "settings.get") {
+        return {
+          ok: true,
+          data: {
+            settings,
+            activeSecretStatus: { hasKey: false },
+            activeImageSecretStatus: { hasKey: true, persistence: "session" },
+          },
+        };
+      }
+      if (request.type === "image.generate") {
+        return {
+          ok: true,
+          data: {
+            provider: "openai",
+            model: "gpt-image-2",
+            prompt: "An unsaved image",
+            aspectRatio: "1:1",
+            size: "1K",
+            mimeType: "image/png",
+            base64Data: "aW1hZ2U=",
+            pixelWidth: 1024,
+            pixelHeight: 1024,
+          },
+        };
+      }
+      return { ok: true, data: { cancelled: true } };
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Create image" }));
+    fireEvent.change(await screen.findByLabelText("Image description"), {
+      target: { value: "An unsaved image" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate image" }));
+
+    await screen.findByRole("img", { name: "Image ready" });
+    expect(await listHistoryRecords()).toEqual([]);
   });
 
   it("shows content-specific character and paragraph ranges", () => {

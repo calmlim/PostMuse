@@ -26,7 +26,7 @@ import {
   OUTPUT_LANGUAGE_OPTIONS,
   type OutputLanguageId,
 } from "../core/generation/languages";
-import type { ImageHistoryMetadata } from "../core/image/types";
+import type { ImageGenerationInput, ImageGenerationResult } from "../core/image/types";
 import { MAX_FILE_BYTES, MAX_SOURCE_CHARACTERS } from "../core/generation/validation";
 import {
   createDefaultPromptLibrary,
@@ -42,6 +42,7 @@ import { loadCreationPreferences } from "../storage/creation-preferences";
 import { loadHistoryEnabled } from "../storage/history-preferences";
 import {
   saveHistoryRecord,
+  saveImageHistoryRecord,
   updateHistoryMedia,
   updateHistoryResult,
 } from "../storage/history-repository";
@@ -520,12 +521,34 @@ export function CreatePanel({
     }
   };
 
-  const saveImageMetadata = async (metadata: ImageHistoryMetadata) => {
-    if (!lastHistoryId) {
+  const saveCompanionImage = async (
+    imageResult: ImageGenerationResult,
+    imageInput: ImageGenerationInput,
+  ) => {
+    if (!historyEnabled) {
       return;
     }
     try {
-      await updateHistoryMedia(lastHistoryId, metadata);
+      if (lastHistoryId) {
+        await updateHistoryMedia(lastHistoryId, imageResult);
+      } else {
+        await saveImageHistoryRecord(imageInput, imageResult);
+      }
+      onHistoryChanged();
+    } catch {
+      setError(copy.historySaveError);
+    }
+  };
+
+  const saveStandaloneImage = async (
+    imageResult: ImageGenerationResult,
+    imageInput: ImageGenerationInput,
+  ) => {
+    if (!historyEnabled) {
+      return;
+    }
+    try {
+      await saveImageHistoryRecord(imageInput, imageResult);
       onHistoryChanged();
     } catch {
       setError(copy.historySaveError);
@@ -953,6 +976,7 @@ export function CreatePanel({
           onOpenSettings={onOpenSettings}
           onClose={() => setCreateMode("text")}
           mode="standalone"
+          onGenerated={saveStandaloneImage}
         />
       )}
 
@@ -966,7 +990,7 @@ export function CreatePanel({
           rawHistorySaved={rawHistorySaved}
           settingsSnapshot={snapshot}
           onOpenSettings={onOpenSettings}
-          onImageGenerated={saveImageMetadata}
+          onImageGenerated={saveCompanionImage}
           onCopied={syncHistoryOnCopy}
           onRegenerateAll={regenerateAll}
           isRegenerating={isGenerating}

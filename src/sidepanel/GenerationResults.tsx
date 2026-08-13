@@ -14,7 +14,7 @@ import {
   getLengthStatus,
 } from "../core/generation/length";
 import { refreshLengthWarnings } from "../core/generation/result-warnings";
-import type { ImageHistoryMetadata } from "../core/image/types";
+import type { ImageGenerationInput, ImageGenerationResult } from "../core/image/types";
 import type { SettingsSnapshot } from "../core/settings/types";
 import type { GenerationResult } from "../core/generation/types";
 import type { Messages } from "../i18n";
@@ -29,7 +29,7 @@ interface GenerationResultsProps {
   rawHistorySaved?: boolean;
   settingsSnapshot?: SettingsSnapshot;
   onOpenSettings?: () => void;
-  onImageGenerated?: (metadata: ImageHistoryMetadata) => void;
+  onImageGenerated?: (result: ImageGenerationResult, input: ImageGenerationInput) => void;
   onCopied?: (result: GenerationResult) => Promise<void> | void;
   onRegenerateAll?: () => void;
   isRegenerating?: boolean;

@@ -433,7 +433,11 @@ describe("background message router", () => {
       data: { historyId: expect.any(String), result: { format: "candidates" } },
     });
     expect(await listHistoryRecords()).toHaveLength(1);
-    expect((await listHistoryRecords())[0].input.source.text).toBe("Current visible X post");
+    const storedRecord = (await listHistoryRecords())[0];
+    if (!("prompt" in storedRecord)) {
+      throw new Error("Expected text history.");
+    }
+    expect(storedRecord.input.source.text).toBe("Current visible X post");
     expect(JSON.stringify(response)).not.toContain("sk-inline-secret");
     if (!response.ok) {
       throw new Error("Inline generation unexpectedly failed.");
@@ -459,7 +463,11 @@ describe("background message router", () => {
         xContentSender,
       ),
     ).resolves.toEqual({ ok: true, data: { synced: true } });
-    const syncedResult = (await listHistoryRecords())[0].result;
+    const syncedRecord = (await listHistoryRecords())[0];
+    if (!("prompt" in syncedRecord)) {
+      throw new Error("Expected text history.");
+    }
+    const syncedResult = syncedRecord.result;
     expect(syncedResult.format).toBe("candidates");
     if (syncedResult.format === "candidates") {
       expect(syncedResult.candidates[0].text).toBe("Edited inline result");

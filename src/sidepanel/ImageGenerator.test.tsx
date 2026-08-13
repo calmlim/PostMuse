@@ -70,7 +70,8 @@ describe("ImageGenerator", () => {
     expect(permissionRequest).toHaveBeenCalledWith({ origins: ["https://api.openai.com/*"] });
     expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "image.generate" }));
     expect(onGenerated).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "image", provider: "openai" }),
+      expect.objectContaining({ provider: "openai", base64Data: "aW1hZ2U=" }),
+      expect.objectContaining({ sourceText: "A useful product lesson", style: "editorial" }),
     );
 
     fireEvent.change(screen.getByLabelText("Aspect ratio"), { target: { value: "16:9" } });

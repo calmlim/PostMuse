@@ -1891,6 +1891,43 @@ textarea {
   -webkit-line-clamp: 3;
 }
 
+.history-image-preview {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.history-image-preview img {
+  display: block;
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--canvas) 78%, var(--surface));
+}
+
+.history-image-preview figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.history-image-preview figcaption > span {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.history-image-preview .secondary-button {
+  min-height: 31px;
+  padding: 6px 8px;
+  font-size: 9.5px;
+  text-decoration: none;
+}
+
 .history-actions {
   display: flex;
   flex-wrap: wrap;

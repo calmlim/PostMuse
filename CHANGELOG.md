@@ -3,6 +3,13 @@
 All notable user-facing changes to PostMuse are documented here. Versions follow
 [Semantic Versioning](https://semver.org/), and release dates use `YYYY-MM-DD`.
 
+## [Unreleased]
+
+### Added
+
+- Successful standalone and companion images are automatically saved to local history when history
+  is enabled, with local preview, download, deletion, and bounded IndexedDB storage.
+
 ## [0.2.0] - 2026-08-13
 
 ### Added

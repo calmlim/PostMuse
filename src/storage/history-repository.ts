@@ -1,18 +1,39 @@
 import type { GenerationInput, GenerationResult } from "../core/generation/types";
-import type { ImageHistoryMetadata } from "../core/image/types";
+import { imageResultToBytes } from "../core/image/blob";
+import type {
+  ImageGenerationInput,
+  ImageGenerationResult,
+  ImageHistoryMetadata,
+} from "../core/image/types";
 import {
   HISTORY_LIMIT,
   HISTORY_SCHEMA_VERSION,
+  type HistoryRecord,
   type HistoryRecordV1,
+  type ImageHistoryRecordV2,
+  isHistoryRecord,
   isHistoryRecordV1,
+  isImageHistoryRecordV2,
 } from "../core/history/types";
 
 export const HISTORY_DATABASE_NAME = "postmuse";
-export const HISTORY_DATABASE_VERSION = 1;
+export const HISTORY_DATABASE_VERSION = 2;
 export const HISTORY_STORE_NAME = "history";
+export const HISTORY_IMAGE_STORE_NAME = "history-images";
 export const HISTORY_BYTE_LIMIT = 10 * 1024 * 1024;
+export const HISTORY_IMAGE_BYTE_LIMIT = 100 * 1024 * 1024;
+export const MAX_HISTORY_IMAGE_BYTES = 25 * 1024 * 1024;
 
-const getRecordByteLength = (record: HistoryRecordV1): number =>
+interface StoredHistoryImage {
+  historyId: string;
+  bytes: Uint8Array;
+  mimeType: ImageGenerationResult["mimeType"];
+}
+
+const getStoredByteLength = (value: unknown): number | undefined =>
+  ArrayBuffer.isView(value) ? value.byteLength : undefined;
+
+const getRecordByteLength = (record: HistoryRecord): number =>
   new TextEncoder().encode(JSON.stringify(record)).byteLength;
 
 const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -39,6 +60,9 @@ const openHistoryDatabase = (): Promise<IDBDatabase> =>
         const store = database.createObjectStore(HISTORY_STORE_NAME, { keyPath: "id" });
         store.createIndex("updatedAt", "updatedAt", { unique: false });
       }
+      if (!database.objectStoreNames.contains(HISTORY_IMAGE_STORE_NAME)) {
+        database.createObjectStore(HISTORY_IMAGE_STORE_NAME, { keyPath: "historyId" });
+      }
     };
     request.onsuccess = () => {
       const database = request.result;
@@ -59,6 +83,63 @@ export interface SaveHistoryOptions {
   styleTemplateVersion: number;
   now?: Date;
 }
+
+const createImageMetadata = (
+  result: ImageGenerationResult,
+  generatedAt: string,
+): ImageHistoryMetadata => ({
+  type: "image",
+  provider: result.provider,
+  model: result.model,
+  prompt: result.prompt,
+  aspectRatio: result.aspectRatio,
+  size: result.size,
+  mimeType: result.mimeType,
+  pixelWidth: result.pixelWidth,
+  pixelHeight: result.pixelHeight,
+  generatedAt,
+});
+
+const pruneHistory = async (transaction: IDBTransaction): Promise<void> => {
+  const historyStore = transaction.objectStore(HISTORY_STORE_NAME);
+  const imageStore = transaction.objectStore(HISTORY_IMAGE_STORE_NAME);
+  const recordsRequest = historyStore.index("updatedAt").getAll();
+  const imagesRequest = imageStore.getAll();
+  const [storedRecords, storedImages] = await Promise.all([
+    requestToPromise(recordsRequest),
+    requestToPromise(imagesRequest),
+  ]);
+  const records = storedRecords.filter(isHistoryRecord);
+  const imageSizes = new Map(
+    (storedImages as StoredHistoryImage[])
+      .filter(
+        (image) =>
+          typeof image?.historyId === "string" && getStoredByteLength(image.bytes) !== undefined,
+      )
+      .map((image) => [image.historyId, getStoredByteLength(image.bytes) ?? 0]),
+  );
+  let retainedRecordBytes = 0;
+  let retainedImageBytes = 0;
+  let retainedCount = 0;
+
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const current = records[index];
+    const recordBytes = getRecordByteLength(current);
+    const imageBytes = imageSizes.get(current.id) ?? 0;
+    if (
+      retainedCount >= HISTORY_LIMIT ||
+      retainedRecordBytes + recordBytes > HISTORY_BYTE_LIMIT ||
+      retainedImageBytes + imageBytes > HISTORY_IMAGE_BYTE_LIMIT
+    ) {
+      historyStore.delete(current.id);
+      imageStore.delete(current.id);
+    } else {
+      retainedRecordBytes += recordBytes;
+      retainedImageBytes += imageBytes;
+      retainedCount += 1;
+    }
+  }
+};
 
 export const saveHistoryRecord = async (
   input: GenerationInput,
@@ -85,24 +166,13 @@ export const saveHistoryRecord = async (
 
   const database = await openHistoryDatabase();
   try {
-    const transaction = database.transaction(HISTORY_STORE_NAME, "readwrite");
+    const transaction = database.transaction(
+      [HISTORY_STORE_NAME, HISTORY_IMAGE_STORE_NAME],
+      "readwrite",
+    );
     const store = transaction.objectStore(HISTORY_STORE_NAME);
     await requestToPromise(store.put(record));
-    const orderedRecords = (await requestToPromise(
-      store.index("updatedAt").getAll(),
-    )) as HistoryRecordV1[];
-    let retainedBytes = 0;
-    let retainedCount = 0;
-    for (let index = orderedRecords.length - 1; index >= 0; index -= 1) {
-      const current = orderedRecords[index];
-      const currentBytes = getRecordByteLength(current);
-      if (retainedCount >= HISTORY_LIMIT || retainedBytes + currentBytes > HISTORY_BYTE_LIMIT) {
-        store.delete(current.id);
-      } else {
-        retainedBytes += currentBytes;
-        retainedCount += 1;
-      }
-    }
+    await pruneHistory(transaction);
     await transactionToPromise(transaction);
     return record;
   } finally {
@@ -110,7 +180,54 @@ export const saveHistoryRecord = async (
   }
 };
 
-export const listHistoryRecords = async (): Promise<HistoryRecordV1[]> => {
+export const saveImageHistoryRecord = async (
+  input: ImageGenerationInput,
+  result: ImageGenerationResult,
+  now: Date = new Date(),
+): Promise<ImageHistoryRecordV2> => {
+  const timestamp = now.toISOString();
+  const record: ImageHistoryRecordV2 = {
+    schemaVersion: 2,
+    kind: "image",
+    id: createHistoryId(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    input,
+    result: createImageMetadata(result, timestamp),
+  };
+  if (!isImageHistoryRecordV2(record)) {
+    throw new Error("Image history record failed validation.");
+  }
+  const bytes = imageResultToBytes(result);
+  if (bytes.byteLength > MAX_HISTORY_IMAGE_BYTES) {
+    throw new Error("Generated image is too large for local history.");
+  }
+
+  const database = await openHistoryDatabase();
+  try {
+    const transaction = database.transaction(
+      [HISTORY_STORE_NAME, HISTORY_IMAGE_STORE_NAME],
+      "readwrite",
+    );
+    await Promise.all([
+      requestToPromise(transaction.objectStore(HISTORY_STORE_NAME).put(record)),
+      requestToPromise(
+        transaction.objectStore(HISTORY_IMAGE_STORE_NAME).put({
+          historyId: record.id,
+          bytes,
+          mimeType: result.mimeType,
+        }),
+      ),
+    ]);
+    await pruneHistory(transaction);
+    await transactionToPromise(transaction);
+    return record;
+  } finally {
+    database.close();
+  }
+};
+
+export const listHistoryRecords = async (): Promise<HistoryRecord[]> => {
   const database = await openHistoryDatabase();
   try {
     const transaction = database.transaction(HISTORY_STORE_NAME, "readonly");
@@ -118,7 +235,7 @@ export const listHistoryRecords = async (): Promise<HistoryRecordV1[]> => {
       transaction.objectStore(HISTORY_STORE_NAME).index("updatedAt").getAll(),
     );
     await transactionToPromise(transaction);
-    return records.filter(isHistoryRecordV1).reverse();
+    return records.filter(isHistoryRecord).reverse();
   } finally {
     database.close();
   }
@@ -153,12 +270,19 @@ export const updateHistoryResult = async (
 
 export const updateHistoryMedia = async (
   historyId: string,
-  media: ImageHistoryMetadata,
+  result: ImageGenerationResult,
   now: Date = new Date(),
 ): Promise<HistoryRecordV1> => {
+  const bytes = imageResultToBytes(result);
+  if (bytes.byteLength > MAX_HISTORY_IMAGE_BYTES) {
+    throw new Error("Generated image is too large for local history.");
+  }
   const database = await openHistoryDatabase();
   try {
-    const transaction = database.transaction(HISTORY_STORE_NAME, "readwrite");
+    const transaction = database.transaction(
+      [HISTORY_STORE_NAME, HISTORY_IMAGE_STORE_NAME],
+      "readwrite",
+    );
     const store = transaction.objectStore(HISTORY_STORE_NAME);
     const current = await requestToPromise(store.get(historyId));
     if (!isHistoryRecordV1(current)) {
@@ -167,7 +291,7 @@ export const updateHistoryMedia = async (
     }
     const updated: HistoryRecordV1 = {
       ...current,
-      media,
+      media: createImageMetadata(result, now.toISOString()),
       updatedAt: now.toISOString(),
     };
     if (!isHistoryRecordV1(updated)) {
@@ -175,8 +299,35 @@ export const updateHistoryMedia = async (
       throw new Error("History media update failed validation.");
     }
     store.put(updated);
+    transaction.objectStore(HISTORY_IMAGE_STORE_NAME).put({
+      historyId,
+      bytes,
+      mimeType: result.mimeType,
+    });
+    await pruneHistory(transaction);
     await transactionToPromise(transaction);
     return updated;
+  } finally {
+    database.close();
+  }
+};
+
+export const loadHistoryImageBlob = async (historyId: string): Promise<Blob | undefined> => {
+  const database = await openHistoryDatabase();
+  try {
+    const transaction = database.transaction(HISTORY_IMAGE_STORE_NAME, "readonly");
+    const stored = (await requestToPromise(
+      transaction.objectStore(HISTORY_IMAGE_STORE_NAME).get(historyId),
+    )) as StoredHistoryImage | undefined;
+    await transactionToPromise(transaction);
+    if (!stored || !ArrayBuffer.isView(stored.bytes) || typeof stored.mimeType !== "string") {
+      return undefined;
+    }
+    const bytes = new Uint8Array(stored.bytes.byteLength);
+    bytes.set(
+      new Uint8Array(stored.bytes.buffer, stored.bytes.byteOffset, stored.bytes.byteLength),
+    );
+    return new Blob([bytes.buffer], { type: stored.mimeType });
   } finally {
     database.close();
   }
@@ -185,8 +336,12 @@ export const updateHistoryMedia = async (
 export const deleteHistoryRecord = async (historyId: string): Promise<void> => {
   const database = await openHistoryDatabase();
   try {
-    const transaction = database.transaction(HISTORY_STORE_NAME, "readwrite");
+    const transaction = database.transaction(
+      [HISTORY_STORE_NAME, HISTORY_IMAGE_STORE_NAME],
+      "readwrite",
+    );
     transaction.objectStore(HISTORY_STORE_NAME).delete(historyId);
+    transaction.objectStore(HISTORY_IMAGE_STORE_NAME).delete(historyId);
     await transactionToPromise(transaction);
   } finally {
     database.close();
@@ -196,8 +351,12 @@ export const deleteHistoryRecord = async (historyId: string): Promise<void> => {
 export const clearHistoryRecords = async (): Promise<void> => {
   const database = await openHistoryDatabase();
   try {
-    const transaction = database.transaction(HISTORY_STORE_NAME, "readwrite");
+    const transaction = database.transaction(
+      [HISTORY_STORE_NAME, HISTORY_IMAGE_STORE_NAME],
+      "readwrite",
+    );
     transaction.objectStore(HISTORY_STORE_NAME).clear();
+    transaction.objectStore(HISTORY_IMAGE_STORE_NAME).clear();
     await transactionToPromise(transaction);
   } finally {
     database.close();
