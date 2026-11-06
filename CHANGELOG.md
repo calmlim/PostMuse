@@ -5,6 +5,8 @@ All notable user-facing changes to PostMuse are documented here. Versions follow
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-07
+
 ### Added
 
 - Translation can use a dedicated model while continuing to share the configured text Provider,
@@ -85,6 +87,7 @@ All notable user-facing changes to PostMuse are documented here. Versions follow
 - First public developer-mode beta with BYOK text generation, X inline drafting, prompt styles,
   local history, and initial OpenAI/Gemini image generation.
 
+[0.3.1]: https://github.com/calmlim/PostMuse/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/calmlim/PostMuse/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/calmlim/PostMuse/compare/v0.1.0-beta.1...v0.2.0
 [0.1.0-beta.1]: https://github.com/calmlim/PostMuse/releases/tag/v0.1.0-beta.1
