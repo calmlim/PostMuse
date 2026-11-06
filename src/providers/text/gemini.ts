@@ -30,6 +30,10 @@ export const geminiAdapter: TextProviderAdapter = {
               : { type: "text", mime_type: "text/plain" },
           generation_config: {
             max_output_tokens: request.maxOutputTokens ?? profile.maxOutputTokens,
+            ...(request.reasoningMode === "disabled" &&
+            /gemini-(?:2\.5|3)(?:-|$)/i.test(profile.model)
+              ? { thinking_config: { thinking_budget: 0 } }
+              : {}),
           },
         }),
       },

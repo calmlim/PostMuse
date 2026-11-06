@@ -13,8 +13,9 @@ export const PRESET_OUTPUT_LENGTHS = ["short", "medium", "long"] as const;
 export type CreationPreferenceLanguage = "follow-source" | OutputLanguageId;
 export type PresetOutputLength = (typeof PRESET_OUTPUT_LENGTHS)[number];
 
-export interface CreationPreferencesV1 {
-  schemaVersion: 1;
+export interface CreationPreferencesV2 {
+  schemaVersion: 2;
+  fastMode: boolean;
   defaultStyleId: string;
   inline: {
     candidateCount: number;
@@ -31,8 +32,9 @@ export interface CreationPreferencesV1 {
   };
 }
 
-export const createDefaultCreationPreferences = (): CreationPreferencesV1 => ({
-  schemaVersion: 1,
+export const createDefaultCreationPreferences = (): CreationPreferencesV2 => ({
+  schemaVersion: 2,
+  fastMode: true,
   defaultStyleId: "professional",
   inline: {
     candidateCount: 2,
@@ -55,15 +57,10 @@ const isOneOf = <T extends readonly string[]>(values: T, value: unknown): value 
 const isIntegerInRange = (value: unknown, min: number, max: number): value is number =>
   typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
 
-export const isCreationPreferencesV1 = (value: unknown): value is CreationPreferencesV1 => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false;
-  }
-  const preferences = value as Record<string, unknown>;
+const hasValidCreationValues = (preferences: Record<string, unknown>): boolean => {
   const inline = preferences.inline;
   const create = preferences.create;
   if (
-    preferences.schemaVersion !== 1 ||
     !isStyleId(preferences.defaultStyleId) ||
     typeof inline !== "object" ||
     inline === null ||
@@ -87,4 +84,34 @@ export const isCreationPreferencesV1 = (value: unknown): value is CreationPrefer
     isOneOf(PRESET_OUTPUT_LENGTHS, createValues.length) &&
     isOneOf(CREATION_PREFERENCE_LANGUAGES, createValues.language)
   );
+};
+
+export const isCreationPreferencesV2 = (value: unknown): value is CreationPreferencesV2 => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const preferences = value as Record<string, unknown>;
+  return (
+    preferences.schemaVersion === 2 &&
+    typeof preferences.fastMode === "boolean" &&
+    hasValidCreationValues(preferences)
+  );
+};
+
+export const migrateCreationPreferences = (value: unknown): CreationPreferencesV2 | undefined => {
+  if (isCreationPreferencesV2(value)) {
+    return value;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const preferences = value as Record<string, unknown>;
+  if (preferences.schemaVersion !== 1 || !hasValidCreationValues(preferences)) {
+    return undefined;
+  }
+  return {
+    ...(preferences as unknown as Omit<CreationPreferencesV2, "schemaVersion" | "fastMode">),
+    schemaVersion: 2,
+    fastMode: true,
+  };
 };

@@ -10,7 +10,7 @@ import type { RegenerationInput } from "../core/generation/types";
 import type { ImageGenerationInput } from "../core/image/types";
 import type { ImageProviderProfile } from "../core/settings/types";
 import { supportsInsecureLocalhost } from "../core/settings/runtime-capabilities";
-import type { TranslationPreferencesV1 } from "../core/translation/types";
+import type { TranslationPreferencesV2 } from "../core/translation/types";
 
 type ExtensionRequestInput =
   | { type: "settings.get" }
@@ -27,7 +27,7 @@ type ExtensionRequestInput =
   | { type: "data.revokeOrigins" }
   | { type: "data.reset" }
   | { type: "translation.preferences.get" }
-  | { type: "translation.preferences.save"; preferences: TranslationPreferencesV1 };
+  | { type: "translation.preferences.save"; preferences: TranslationPreferencesV2 };
 
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "settings.get" }>,

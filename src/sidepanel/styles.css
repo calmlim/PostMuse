@@ -1793,6 +1793,17 @@ textarea {
   line-height: 1.45;
 }
 
+.translation-fast-toggle,
+.creation-fast-toggle {
+  margin-top: 16px;
+}
+
+.translation-fast-toggle > svg,
+.creation-fast-toggle > svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
 .history-disabled-note {
   margin: -6px 0 0 27px;
 }

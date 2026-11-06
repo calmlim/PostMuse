@@ -36,7 +36,13 @@ beforeEach(() => {
     if (request.type === "translation.preferences.get") {
       return {
         ok: true,
-        data: { schemaVersion: 1, targetLanguage: "en", displayMode: "below" },
+        data: {
+          schemaVersion: 2,
+          targetLanguage: "en",
+          displayMode: "below",
+          translationModel: "",
+          fastMode: true,
+        },
       };
     }
 
@@ -109,6 +115,9 @@ describe("Side Panel App", () => {
 
     expect(await screen.findByRole("heading", { name: "Translate posts your way" })).toBeVisible();
     fireEvent.change(screen.getByLabelText("Translate to"), { target: { value: "zh-CN" } });
+    fireEvent.change(screen.getByLabelText("Translation model"), {
+      target: { value: "gpt-4o-mini" },
+    });
     fireEvent.click(screen.getByRole("radio", { name: /Replace visually/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save translation settings" }));
 
@@ -117,9 +126,11 @@ describe("Side Panel App", () => {
         expect.objectContaining({
           type: "translation.preferences.save",
           preferences: {
-            schemaVersion: 1,
+            schemaVersion: 2,
             targetLanguage: "zh-CN",
             displayMode: "replace",
+            translationModel: "gpt-4o-mini",
+            fastMode: true,
           },
         }),
       ),

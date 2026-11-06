@@ -16,15 +16,15 @@ import type {
 import { isGenerationInput, isRegenerationInput } from "../generation/validation";
 import type { ImageGenerationInput, ImageGenerationResult } from "../image/types";
 import { isImageGenerationInput } from "../image/validation";
-import type { CreationPreferencesV1 } from "../preferences/creation";
+import type { CreationPreferencesV2 } from "../preferences/creation";
 import type { Locale } from "../../i18n/locale";
 import { isGenerationResult } from "../history/types";
 import type {
   TranslationInput,
-  TranslationPreferencesV1,
+  TranslationPreferencesV2,
   TranslationResult,
 } from "../translation/types";
-import { isTranslationPreferencesV1 } from "../translation/preferences";
+import { isTranslationPreferencesV2 } from "../translation/preferences";
 import { isTranslationInput } from "../translation/validation";
 
 export const MESSAGE_TYPES = [
@@ -82,7 +82,7 @@ export type ExtensionRequest =
   | {
       type: "translation.preferences.save";
       requestId: string;
-      preferences: TranslationPreferencesV1;
+      preferences: TranslationPreferencesV2;
     }
   | { type: "inline.bootstrap"; requestId: string }
   | {
@@ -104,9 +104,9 @@ export interface InlineBootstrap {
   model: string;
   styles: Array<{ id: string; label: string; version: number; isBuiltInDefault: boolean }>;
   defaultStyleId: string;
-  preferences: CreationPreferencesV1["inline"];
+  preferences: CreationPreferencesV2["inline"];
   translation: {
-    preferences: TranslationPreferencesV1;
+    preferences: TranslationPreferencesV2;
     configured: boolean;
   };
 }
@@ -155,8 +155,8 @@ export interface ExtensionResponseMap {
   "data.getProviderAccess": GrantedProviderPermissionSummary;
   "data.revokeOrigins": ProviderPermissionSummary;
   "data.reset": { snapshot: SettingsSnapshot; remainingOriginCount: number };
-  "translation.preferences.get": TranslationPreferencesV1;
-  "translation.preferences.save": TranslationPreferencesV1;
+  "translation.preferences.get": TranslationPreferencesV2;
+  "translation.preferences.save": TranslationPreferencesV2;
   "inline.bootstrap": InlineBootstrap;
   "inline.translate": TranslationResult;
   "inline.generate": { result: GenerationResult; historyId?: string };
@@ -208,7 +208,7 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
   }
 
   if (value.type === "translation.preferences.save") {
-    return isTranslationPreferencesV1(value.preferences);
+    return isTranslationPreferencesV2(value.preferences);
   }
 
   if (value.type === "inline.translate") {

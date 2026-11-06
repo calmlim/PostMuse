@@ -24,6 +24,7 @@ export const createTranslationCacheKey = async (input: {
   targetLanguage: OutputLanguageId;
   provider: ProviderId;
   model: string;
+  fastMode: boolean;
 }): Promise<string> =>
   digest(
     JSON.stringify([
@@ -32,6 +33,7 @@ export const createTranslationCacheKey = async (input: {
       input.targetLanguage,
       input.provider,
       input.model,
+      input.fastMode,
     ]),
   );
 

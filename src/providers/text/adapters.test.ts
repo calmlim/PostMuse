@@ -222,10 +222,12 @@ describe("text provider adapters", () => {
       outputMode: "plain-text",
       maxOutputTokens: 96,
       suppressCustomSampling: true,
+      reasoningMode: "disabled",
     } satisfies NormalizedTextRequest;
     const context = (provider: ProviderId) => ({
       profile: {
         ...profileFor(provider),
+        ...(provider === "openai-compatible" ? { model: "gpt-5-mini" } : {}),
         samplingMode: "custom" as const,
         temperature: 1.2,
       },
@@ -267,7 +269,10 @@ describe("text provider adapters", () => {
     await xAIAdapter.generate(translationRequest, context("xai"));
 
     const bodies = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)));
-    expect(bodies[0]).toMatchObject({ max_completion_tokens: 96 });
+    expect(bodies[0]).toMatchObject({
+      max_completion_tokens: 96,
+      reasoning_effort: "none",
+    });
     expect(bodies[0]).not.toHaveProperty("response_format");
     expect(bodies[0]).not.toHaveProperty("temperature");
     expect(bodies[1]).toMatchObject({ max_tokens: 96 });
@@ -277,6 +282,72 @@ describe("text provider adapters", () => {
     expect(bodies[3]).toMatchObject({ max_tokens: 96 });
     expect(bodies[3]).not.toHaveProperty("response_format");
     expect(bodies[3]).not.toHaveProperty("temperature");
+  });
+
+  it("disables thinking for supported Gemini fast requests", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          steps: [{ type: "model_output", content: [{ type: "text", text: "Bonjour" }] }],
+        }),
+        { status: 200 },
+      ),
+    );
+    await geminiAdapter.generate(
+      {
+        system: "Translate directly.",
+        user: JSON.stringify("Hello"),
+        outputMode: "plain-text",
+        reasoningMode: "disabled",
+      },
+      {
+        profile: { ...profileFor("gemini"), model: "gemini-2.5-flash" },
+        apiKey: "test-secret-value",
+        signal: new AbortController().signal,
+        purpose: "translation",
+      },
+    );
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.generation_config).toMatchObject({
+      thinking_config: { thinking_budget: 0 },
+    });
+  });
+
+  it("disables DeepSeek thinking on generic OpenAI-compatible fast requests", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: "Bonjour" } }] }), {
+        status: 200,
+      }),
+    );
+    await openAICompatibleAdapter.generate(
+      {
+        system: "Translate directly.",
+        user: JSON.stringify("Hello"),
+        outputMode: "plain-text",
+        maxOutputTokens: 1200,
+        reasoningMode: "disabled",
+      },
+      {
+        profile: {
+          ...profileFor("openai-compatible"),
+          baseUrl: "https://cpa.agentpact.io/v1",
+          model: "deepseek-v4.1-flash",
+        },
+        apiKey: "test-secret-value",
+        signal: new AbortController().signal,
+        purpose: "translation",
+      },
+    );
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body).toMatchObject({
+      model: "deepseek-v4.1-flash",
+      max_tokens: 1200,
+      thinking: { type: "disabled" },
+    });
+    expect(body).not.toHaveProperty("reasoning_effort");
   });
 
   it("maps Provider safety refusals to a stable application error", async () => {

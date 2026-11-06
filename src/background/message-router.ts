@@ -100,7 +100,10 @@ const runGeneration = async (
   const controller = new AbortController();
   activeGenerationRequests.set(requestId, controller);
   try {
-    const settings = await loadSettings();
+    const [settings, creationPreferences] = await Promise.all([
+      loadSettings(),
+      loadCreationPreferences(),
+    ]);
     const profile = getActiveProviderProfile(settings);
     if (!(await hasProviderOriginPermission(profile.baseUrl))) {
       throw new AppError(
@@ -110,7 +113,13 @@ const runGeneration = async (
     }
 
     const apiKey = await readApiKey(createTextSecretBinding(profile), profile.keyPersistence);
-    const result = await generateText(input, profile, apiKey, controller.signal);
+    const result = await generateText(
+      input,
+      profile,
+      apiKey,
+      controller.signal,
+      creationPreferences.fastMode,
+    );
     let historyId: string | undefined;
     if (saveInlineHistory && result.format !== "raw" && (await loadHistoryEnabled())) {
       try {
@@ -177,7 +186,11 @@ const runTranslation = async (
   try {
     const settings = await loadSettings();
     const preferences = await loadTranslationPreferences(settings.uiLocale);
-    const profile = getActiveProviderProfile(settings);
+    const writingProfile = getActiveProviderProfile(settings);
+    const profile = {
+      ...writingProfile,
+      model: preferences.translationModel.trim() || writingProfile.model.trim(),
+    };
     if (isSameTranslationLanguage(input.sourceLanguageHint, preferences.targetLanguage)) {
       return {
         ok: true,
@@ -217,6 +230,7 @@ const handleRequest = async (
     const translationPreferences = await loadTranslationPreferences(settings.uiLocale);
     const profile = getActiveProviderProfile(settings);
     const secretStatus = await getSecretStatus(createTextSecretBinding(profile));
+    const translationModel = translationPreferences.translationModel.trim() || profile.model.trim();
     const styles = promptLibrary.active.map(({ id, label, version, source, isOverridden }) => ({
       id,
       label,
@@ -237,7 +251,7 @@ const handleRequest = async (
         preferences: creationPreferences.inline,
         translation: {
           preferences: translationPreferences,
-          configured: Boolean(profile.model.trim() && secretStatus.hasKey),
+          configured: Boolean(translationModel && secretStatus.hasKey),
         },
       },
     };
@@ -382,7 +396,10 @@ const handleRequest = async (
     const controller = new AbortController();
     activeGenerationRequests.set(request.requestId, controller);
     try {
-      const settings = await loadSettings();
+      const [settings, creationPreferences] = await Promise.all([
+        loadSettings(),
+        loadCreationPreferences(),
+      ]);
       const profile = getActiveProviderProfile(settings);
       if (!(await hasProviderOriginPermission(profile.baseUrl))) {
         throw new AppError(
@@ -393,7 +410,13 @@ const handleRequest = async (
       const apiKey = await readApiKey(createTextSecretBinding(profile), profile.keyPersistence);
       return {
         ok: true,
-        data: await regenerateText(request.input, profile, apiKey, controller.signal),
+        data: await regenerateText(
+          request.input,
+          profile,
+          apiKey,
+          controller.signal,
+          creationPreferences.fastMode,
+        ),
       };
     } finally {
       activeGenerationRequests.delete(request.requestId);

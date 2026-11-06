@@ -32,6 +32,28 @@ describe("creation preferences", () => {
     expect(set).toHaveBeenCalledWith({ [CREATION_PREFERENCES_STORAGE_KEY]: preferences });
   });
 
+  it("migrates version 1 preferences with fast writing enabled", async () => {
+    const current = createDefaultCreationPreferences();
+    const legacy = {
+      schemaVersion: 1,
+      defaultStyleId: current.defaultStyleId,
+      inline: current.inline,
+      create: current.create,
+    };
+    get.mockResolvedValue({ [CREATION_PREFERENCES_STORAGE_KEY]: legacy });
+
+    await expect(loadCreationPreferences()).resolves.toMatchObject({
+      schemaVersion: 2,
+      fastMode: true,
+    });
+    expect(set).toHaveBeenCalledWith({
+      [CREATION_PREFERENCES_STORAGE_KEY]: expect.objectContaining({
+        schemaVersion: 2,
+        fastMode: true,
+      }),
+    });
+  });
+
   it("rejects custom length as a persistent preset", async () => {
     const preferences = createDefaultCreationPreferences() as unknown as Record<string, unknown>;
     (preferences.inline as Record<string, unknown>).length = "custom";

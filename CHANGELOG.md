@@ -5,6 +5,24 @@ All notable user-facing changes to PostMuse are documented here. Versions follow
 
 ## [Unreleased]
 
+### Added
+
+- Translation can use a dedicated model while continuing to share the configured text Provider,
+  Base URL, host permission, and API key with writing.
+- Independent fast modes for writing and translation ask supported models to skip reasoning;
+  complex writing can opt back into the Provider default.
+
+### Changed
+
+- OpenAI GPT-5/6 requests use `reasoning_effort: none`, DeepSeek-compatible requests use disabled
+  thinking, and supported Gemini requests use a zero thinking budget when fast mode is enabled.
+
+### Fixed
+
+- Translation now uses the text Provider profile's configured maximum output-token limit for every
+  model, preventing reasoning models from exhausting a smaller translation-specific cap before
+  returning visible text.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added

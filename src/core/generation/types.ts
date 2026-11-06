@@ -112,6 +112,7 @@ interface NormalizedTextRequestBase {
   user: string;
   maxOutputTokens?: number;
   suppressCustomSampling?: boolean;
+  reasoningMode?: "disabled";
 }
 
 export type NormalizedTextRequest = NormalizedTextRequestBase &

@@ -12,6 +12,7 @@ export const generateText = async (
   profile: ProviderProfile,
   apiKey: string | undefined,
   signal: AbortSignal,
+  fastMode = true,
 ): Promise<GenerationResult> => {
   if (!profile.model.trim()) {
     throw new AppError("MODEL_REQUIRED", "Choose a model before generating.");
@@ -25,7 +26,7 @@ export const generateText = async (
     throw new AppError("STYLE_NOT_FOUND", "Choose an available style before generating.");
   }
 
-  const request = buildTextGenerationRequest(input, style, await loadWritingProfile());
+  const request = buildTextGenerationRequest(input, style, await loadWritingProfile(), fastMode);
   const response = await getTextProviderAdapter(profile.provider).generate(request, {
     profile,
     apiKey,

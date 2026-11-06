@@ -85,9 +85,14 @@ export function InlineTranslation({
           setResult(translated);
           onTranslatedVisibilityChange(translated.status === "translated");
         }
-      } catch {
+      } catch (translationError) {
         if (activeRequestId.current === requestId) {
-          setError(copy.inlineTranslationError);
+          setError(
+            translationError instanceof Error &&
+              translationError.name === "HOST_PERMISSION_REQUIRED"
+              ? copy.inlinePermissionError
+              : copy.inlineTranslationError,
+          );
         }
       } finally {
         if (activeRequestId.current === requestId) {
@@ -99,6 +104,7 @@ export function InlineTranslation({
     [
       bootstrap.translation.configured,
       copy.inlineSetupBody,
+      copy.inlinePermissionError,
       copy.inlineTranslationError,
       onTranslatedVisibilityChange,
       source.sourceLanguageHint,

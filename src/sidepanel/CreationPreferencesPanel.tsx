@@ -2,6 +2,7 @@ import {
   CaretDown,
   CheckCircle,
   FloppyDisk,
+  Lightning,
   SlidersHorizontal,
   WarningCircle,
 } from "@phosphor-icons/react";
@@ -93,6 +94,21 @@ export function CreationPreferencesPanel({
 
       {isOpen ? (
         <div id="creation-defaults-content" className="settings-disclosure-content">
+          <label className="history-toggle creation-fast-toggle">
+            <input
+              type="checkbox"
+              checked={preferences.fastMode}
+              onChange={(event) =>
+                setPreferences({ ...preferences, fastMode: event.target.checked })
+              }
+            />
+            <Lightning size={18} weight="fill" aria-hidden="true" />
+            <span>
+              <strong>{copy.writingFastMode}</strong>
+              <small>{copy.writingFastModeHint}</small>
+            </span>
+          </label>
+          <p className="mock-note">{copy.writingFastModeCompatibility}</p>
           <section className="settings-subsection" aria-labelledby="inline-defaults-title">
             <h3 id="inline-defaults-title">{copy.inlineDefaultsTitle}</h3>
             <div className="field-grid">

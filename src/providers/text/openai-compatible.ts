@@ -22,6 +22,13 @@ export const openAICompatibleAdapter: TextProviderAdapter = {
     if (profile.samplingMode === "custom" && !request.suppressCustomSampling) {
       body.temperature = profile.temperature;
     }
+    if (request.reasoningMode === "disabled") {
+      if (officialOpenAI && /^gpt-(?:5|6)(?:-|$)/i.test(profile.model.trim())) {
+        body.reasoning_effort = "none";
+      } else if (/deepseek/i.test(profile.model)) {
+        body.thinking = { type: "disabled" };
+      }
+    }
     if (request.outputMode === "structured" && officialOpenAI && !legacyOfficialModel) {
       body.response_format = {
         type: "json_schema",

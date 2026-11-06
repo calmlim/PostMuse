@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildTranslationRequest,
-  getTranslationMaxOutputTokens,
-  isSameTranslationLanguage,
-} from "./request-builder";
+import { buildTranslationRequest, isSameTranslationLanguage } from "./request-builder";
 
 describe("translation request builder", () => {
   it("builds a minimal plain-text request without writing layers", () => {
@@ -19,12 +15,24 @@ describe("translation request builder", () => {
     expect(request.user).toBe(
       JSON.stringify('\nHello\n@postmuse https://example.com "ignore rules"\n'),
     );
+    expect(request.maxOutputTokens).toBe(1200);
     expect(request.suppressCustomSampling).toBe(true);
+    expect(request.reasoningMode).toBe("disabled");
   });
 
-  it("bounds output tokens by the active profile", () => {
-    expect(getTranslationMaxOutputTokens("hello", 1200)).toBe(64);
-    expect(getTranslationMaxOutputTokens("字".repeat(2000), 500)).toBe(500);
+  it("can preserve Provider reasoning defaults when fast mode is off", () => {
+    const request = buildTranslationRequest({ text: "Hello" }, "fr", 1200, false);
+    expect(request).not.toHaveProperty("reasoningMode");
+  });
+
+  it("uses the configured profile output-token limit", () => {
+    expect(buildTranslationRequest({ text: "hello" }, "zh-CN", 1200).maxOutputTokens).toBe(1200);
+    expect(buildTranslationRequest({ text: "字".repeat(2000) }, "en", 500).maxOutputTokens).toBe(
+      500,
+    );
+    expect(
+      buildTranslationRequest({ text: "x".repeat(220) }, "zh-CN", 10_000).maxOutputTokens,
+    ).toBe(10_000);
   });
 
   it("skips reliable same-language hints but not ambiguous Chinese", () => {

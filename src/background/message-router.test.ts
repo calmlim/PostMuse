@@ -212,7 +212,13 @@ describe("background message router", () => {
       {
         type: "translation.preferences.save",
         requestId: "translation-preferences",
-        preferences: { schemaVersion: 1, targetLanguage: "fr", displayMode: "below" },
+        preferences: {
+          schemaVersion: 2,
+          targetLanguage: "fr",
+          displayMode: "below",
+          translationModel: "deepseek-v4.1-flash",
+          fastMode: true,
+        },
       },
       trustedSender,
     );
@@ -246,6 +252,8 @@ describe("background message router", () => {
     });
     expect(JSON.stringify(response)).not.toContain("sk-translation-secret");
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.model).toBe("deepseek-v4.1-flash");
+    expect(body.thinking).toEqual({ type: "disabled" });
     expect(body.messages[0].content).toContain("to French");
     expect(body.messages[1].content).toBe(JSON.stringify("Hello\nworld"));
     expect(body).not.toHaveProperty("response_format");
@@ -289,7 +297,13 @@ describe("background message router", () => {
       {
         type: "translation.preferences.save",
         requestId: "translation-cancel-preferences",
-        preferences: { schemaVersion: 1, targetLanguage: "fr", displayMode: "below" },
+        preferences: {
+          schemaVersion: 2,
+          targetLanguage: "fr",
+          displayMode: "below",
+          translationModel: "",
+          fastMode: true,
+        },
       },
       trustedSender,
     );
@@ -390,7 +404,7 @@ describe("background message router", () => {
   });
 
   it("generates through the active Provider without exposing its key", async () => {
-    const profile = { ...createDefaultProviderProfile(), model: "gpt-test" };
+    const profile = { ...createDefaultProviderProfile(), model: "gpt-5-mini" };
     await routeExtensionMessage(
       {
         type: "settings.saveProfile",
@@ -440,6 +454,7 @@ describe("background message router", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(requestBody.messages[0].content).toContain("Use the saved prompt override.");
+    expect(requestBody.reasoning_effort).toBe("none");
   });
 
   it("regenerates one thread position with neighboring context", async () => {

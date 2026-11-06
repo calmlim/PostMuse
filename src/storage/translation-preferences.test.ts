@@ -31,8 +31,33 @@ describe("translation preferences", () => {
     });
   });
 
+  it("migrates version 1 preferences with fast translation enabled", async () => {
+    get.mockResolvedValue({
+      [TRANSLATION_PREFERENCES_STORAGE_KEY]: {
+        schemaVersion: 1,
+        targetLanguage: "fr",
+        displayMode: "replace",
+      },
+    });
+
+    await expect(loadTranslationPreferences()).resolves.toMatchObject({
+      schemaVersion: 2,
+      targetLanguage: "fr",
+      displayMode: "replace",
+      translationModel: "",
+      fastMode: true,
+    });
+    expect(set).toHaveBeenCalled();
+  });
+
   it("persists a supported target and reversible display mode", async () => {
-    const preferences = { schemaVersion: 1, targetLanguage: "ja", displayMode: "replace" } as const;
+    const preferences = {
+      schemaVersion: 2,
+      targetLanguage: "ja",
+      displayMode: "replace",
+      translationModel: "fast-translate",
+      fastMode: true,
+    } as const;
     await expect(saveTranslationPreferences(preferences)).resolves.toEqual(preferences);
     expect(set).toHaveBeenCalledWith({ [TRANSLATION_PREFERENCES_STORAGE_KEY]: preferences });
   });

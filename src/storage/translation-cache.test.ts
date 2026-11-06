@@ -22,6 +22,7 @@ describe("translation session cache", () => {
       targetLanguage: "fr",
       provider: "openai-compatible",
       model: "test-model",
+      fastMode: true,
     });
     await saveCachedTranslation({
       key,
@@ -58,5 +59,19 @@ describe("translation session cache", () => {
     expect(entries).toHaveLength(100);
     expect(entries.some((entry) => entry.key === "key-0")).toBe(true);
     expect(entries.some((entry) => entry.key === "key-1")).toBe(false);
+  });
+
+  it("separates fast-mode and Provider-default translations", async () => {
+    const input = {
+      sourceText: "Hello",
+      targetLanguage: "fr" as const,
+      provider: "openai-compatible" as const,
+      model: "test-model",
+    };
+    const [fast, providerDefault] = await Promise.all([
+      createTranslationCacheKey({ ...input, fastMode: true }),
+      createTranslationCacheKey({ ...input, fastMode: false }),
+    ]);
+    expect(fast).not.toBe(providerDefault);
   });
 });

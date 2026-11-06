@@ -57,9 +57,11 @@ beforeEach(() => {
             translation: {
               configured: true,
               preferences: {
-                schemaVersion: 1,
+                schemaVersion: 2,
                 targetLanguage: "zh-CN",
                 displayMode: translationDisplayMode,
+                translationModel: "",
+                fastMode: true,
               },
             },
           },

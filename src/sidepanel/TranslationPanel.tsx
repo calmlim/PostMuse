@@ -1,9 +1,15 @@
-import { CheckCircle, FloppyDisk, GlobeHemisphereWest, WarningCircle } from "@phosphor-icons/react";
+import {
+  CheckCircle,
+  FloppyDisk,
+  GlobeHemisphereWest,
+  Lightning,
+  WarningCircle,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { OUTPUT_LANGUAGE_OPTIONS } from "../core/generation/languages";
 import type { SettingsSnapshot } from "../core/settings/types";
 import { createDefaultTranslationPreferences } from "../core/translation/preferences";
-import type { TranslationPreferencesV1 } from "../core/translation/types";
+import type { TranslationPreferencesV2 } from "../core/translation/types";
 import type { Messages } from "../i18n";
 import { sendExtensionRequest } from "./extension-client";
 
@@ -19,7 +25,7 @@ const getActiveProfile = (snapshot: SettingsSnapshot) =>
     (profile) => profile.id === snapshot.settings.activeTextProviderProfileId,
   ) ?? snapshot.settings.textProviderProfiles[0];
 
-const notifyXTabs = async (preferences: TranslationPreferencesV1): Promise<void> => {
+const notifyXTabs = async (preferences: TranslationPreferencesV2): Promise<void> => {
   if (typeof chrome === "undefined" || !chrome.tabs?.query) {
     return;
   }
@@ -39,7 +45,7 @@ const notifyXTabs = async (preferences: TranslationPreferencesV1): Promise<void>
 };
 
 export function TranslationPanel({ copy, onOpenSettings }: TranslationPanelProps) {
-  const [preferences, setPreferences] = useState<TranslationPreferencesV1>(
+  const [preferences, setPreferences] = useState<TranslationPreferencesV2>(
     createDefaultTranslationPreferences(),
   );
   const [settings, setSettings] = useState<SettingsSnapshot>();
@@ -65,7 +71,8 @@ export function TranslationPanel({ copy, onOpenSettings }: TranslationPanelProps
   }, []);
 
   const profile = settings ? getActiveProfile(settings) : undefined;
-  const configured = Boolean(profile?.model.trim() && settings?.activeSecretStatus.hasKey);
+  const effectiveModel = preferences.translationModel.trim() || profile?.model.trim() || "";
+  const configured = Boolean(effectiveModel && settings?.activeSecretStatus.hasKey);
 
   const save = async () => {
     setIsBusy(true);
@@ -108,7 +115,7 @@ export function TranslationPanel({ copy, onOpenSettings }: TranslationPanelProps
             onChange={(event) =>
               setPreferences((current) => ({
                 ...current,
-                targetLanguage: event.target.value as TranslationPreferencesV1["targetLanguage"],
+                targetLanguage: event.target.value as TranslationPreferencesV2["targetLanguage"],
               }))
             }
             disabled={isBusy}
@@ -178,11 +185,45 @@ export function TranslationPanel({ copy, onOpenSettings }: TranslationPanelProps
               {configured && profile
                 ? copy.translationProviderReady
                     .replace("{provider}", profile.displayName)
-                    .replace("{model}", profile.model)
+                    .replace("{model}", effectiveModel)
                 : copy.translationProviderMissing}
             </span>
           </div>
         </div>
+        <div className="form-field">
+          <label htmlFor="translation-model">{copy.translationModelLabel}</label>
+          <input
+            id="translation-model"
+            value={preferences.translationModel}
+            onChange={(event) =>
+              setPreferences((current) => ({
+                ...current,
+                translationModel: event.target.value.slice(0, 200),
+              }))
+            }
+            placeholder={profile?.model || copy.translationModelPlaceholder}
+            disabled={isBusy}
+            autoComplete="off"
+            aria-describedby="translation-model-hint"
+          />
+          <small id="translation-model-hint">{copy.translationModelHint}</small>
+        </div>
+        <label className="history-toggle translation-fast-toggle">
+          <input
+            type="checkbox"
+            checked={preferences.fastMode}
+            onChange={(event) =>
+              setPreferences((current) => ({ ...current, fastMode: event.target.checked }))
+            }
+            disabled={isBusy}
+          />
+          <Lightning size={18} weight="fill" aria-hidden="true" />
+          <span>
+            <strong>{copy.translationFastMode}</strong>
+            <small>{copy.translationFastModeHint}</small>
+          </span>
+        </label>
+        <p className="mock-note">{copy.translationFastModeCompatibility}</p>
         {!configured ? (
           <button type="button" className="secondary-button" onClick={onOpenSettings}>
             {copy.translationOpenSettings}

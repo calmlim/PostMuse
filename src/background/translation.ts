@@ -7,7 +7,7 @@ import {
 } from "../core/translation/request-builder";
 import type {
   TranslationInput,
-  TranslationPreferencesV1,
+  TranslationPreferencesV2,
   TranslationResult,
 } from "../core/translation/types";
 import { getTextProviderAdapter } from "../providers/text";
@@ -19,7 +19,7 @@ import {
 
 export const translateText = async (
   input: TranslationInput,
-  preferences: TranslationPreferencesV1,
+  preferences: TranslationPreferencesV2,
   profile: ProviderProfile,
   apiKey: string | undefined,
   signal: AbortSignal,
@@ -40,6 +40,7 @@ export const translateText = async (
     targetLanguage: preferences.targetLanguage,
     provider: profile.provider,
     model: profile.model.trim(),
+    fastMode: preferences.fastMode,
   });
   const outputLimitMayBeLow =
     profile.maxOutputTokens < getTranslationSuggestedOutputTokens(input.text);
@@ -50,10 +51,18 @@ export const translateText = async (
     }
   }
 
-  const response = await getTextProviderAdapter(profile.provider).generate(
-    buildTranslationRequest(input, preferences.targetLanguage, profile.maxOutputTokens),
-    { profile, apiKey, signal, purpose: "translation" },
+  const request = buildTranslationRequest(
+    input,
+    preferences.targetLanguage,
+    profile.maxOutputTokens,
+    preferences.fastMode,
   );
+  const response = await getTextProviderAdapter(profile.provider).generate(request, {
+    profile,
+    apiKey,
+    signal,
+    purpose: "translation",
+  });
   const text = response.text.trim();
   if (!text) {
     throw new AppError("OUTPUT_INVALID", "The Provider returned an empty translation.");

@@ -129,6 +129,7 @@ export const buildTextGenerationRequest = (
   input: GenerationInput,
   selectedStyle?: { instruction: string },
   writingProfile?: string,
+  fastMode = true,
 ): NormalizedTextRequest => {
   const style = selectedStyle ?? getBuiltInStyle(input.styleId);
   if (!style) {
@@ -148,5 +149,6 @@ export const buildTextGenerationRequest = (
     outputMode: "structured",
     schemaName: input.contentType === "thread" ? "thread" : "post_candidates",
     schema,
+    ...(fastMode ? { reasoningMode: "disabled" as const } : {}),
   };
 };

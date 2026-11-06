@@ -66,6 +66,7 @@ export const regenerateText = async (
   profile: ProviderProfile,
   apiKey: string | undefined,
   signal: AbortSignal,
+  fastMode = true,
 ): Promise<RegenerationResult> => {
   if (!profile.model.trim()) {
     throw new AppError("MODEL_REQUIRED", "Choose a model before regenerating.");
@@ -96,6 +97,7 @@ export const regenerateText = async (
       ...buildTextWritingSections(request.input, style, writingProfile),
     ].join("\n\n"),
     user: buildRegenerationUserPrompt(request, position),
+    ...(fastMode ? { reasoningMode: "disabled" as const } : {}),
   };
   const response = await getTextProviderAdapter(profile.provider).generate(normalized, {
     profile,
