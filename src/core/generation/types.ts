@@ -107,12 +107,24 @@ export interface RegenerationResult {
   model: string;
 }
 
-export interface NormalizedTextRequest {
+interface NormalizedTextRequestBase {
   system: string;
   user: string;
-  schemaName: "post_candidates" | "thread" | "connection_test" | "target_regeneration";
-  schema: Record<string, unknown>;
+  maxOutputTokens?: number;
+  suppressCustomSampling?: boolean;
 }
+
+export type NormalizedTextRequest = NormalizedTextRequestBase &
+  (
+    | {
+        outputMode: "structured";
+        schemaName: "post_candidates" | "thread" | "connection_test" | "target_regeneration";
+        schema: Record<string, unknown>;
+      }
+    | {
+        outputMode: "plain-text";
+      }
+  );
 
 export interface NormalizedTextResponse {
   text: string;

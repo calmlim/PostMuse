@@ -6,6 +6,7 @@ import { getTextProviderAdapter } from "../providers/text";
 const CONNECTION_REQUEST: NormalizedTextRequest = {
   system: "This is a connection test. Return only the requested JSON object.",
   user: 'Return {"ok":true}. Do not include commentary.',
+  outputMode: "structured",
   schemaName: "connection_test",
   schema: {
     type: "object",

@@ -9,6 +9,19 @@ const ownedElements = (article: HTMLElement, selector: string): HTMLElement[] =>
     isOwnedByPost(element, article),
   );
 
+export const findPrimaryXPostTextElement = (article: HTMLElement): HTMLElement | undefined =>
+  ownedElements(article, X_SELECTORS.postText)[0];
+
+const preserveTranslationText = (value: string | null | undefined): string | undefined => {
+  const normalized = value
+    ?.replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trimEnd())
+    .join("\n")
+    .trim();
+  return normalized || undefined;
+};
+
 const normalizeText = (value: string | null | undefined): string | undefined => {
   const normalized = value?.replace(/\s+/g, " ").trim();
   return normalized || undefined;
@@ -75,6 +88,34 @@ export const findXPostActionBar = (article: HTMLElement): HTMLElement | undefine
   const replyAction = ownedElements(article, X_SELECTORS.replyAction)[0];
   const actionGroup = replyAction?.closest<HTMLElement>(X_SELECTORS.actionGroup);
   return actionGroup && isOwnedByPost(actionGroup, article) ? actionGroup : undefined;
+};
+
+export interface XPostTranslationSource {
+  text: string;
+  sourceLanguageHint?: string;
+  textElement: HTMLElement;
+  signature: string;
+}
+
+export const extractXPostTranslationSource = (
+  article: HTMLElement,
+): XPostTranslationSource | undefined => {
+  const textElement = findPrimaryXPostTextElement(article);
+  const text = preserveTranslationText(textElement?.innerText || textElement?.textContent);
+  if (!textElement || !text) {
+    return undefined;
+  }
+  const languageElement = textElement.closest<HTMLElement>("[lang]") ?? textElement;
+  const statusLink = ownedElements(article, X_SELECTORS.statusLink)[0] as
+    | HTMLAnchorElement
+    | undefined;
+  const postUrl = parseStatusLink(statusLink).postUrl ?? "";
+  return {
+    text,
+    sourceLanguageHint: normalizeText(languageElement.getAttribute("lang")),
+    textElement,
+    signature: `${postUrl}\u0000${text}`,
+  };
 };
 
 export const extractXPost = (article: HTMLElement | null): XPostExtractionResult => {

@@ -19,6 +19,13 @@ import { isImageGenerationInput } from "../image/validation";
 import type { CreationPreferencesV1 } from "../preferences/creation";
 import type { Locale } from "../../i18n/locale";
 import { isGenerationResult } from "../history/types";
+import type {
+  TranslationInput,
+  TranslationPreferencesV1,
+  TranslationResult,
+} from "../translation/types";
+import { isTranslationPreferencesV1 } from "../translation/preferences";
+import { isTranslationInput } from "../translation/validation";
 
 export const MESSAGE_TYPES = [
   "settings.get",
@@ -34,7 +41,10 @@ export const MESSAGE_TYPES = [
   "data.getProviderAccess",
   "data.revokeOrigins",
   "data.reset",
+  "translation.preferences.get",
+  "translation.preferences.save",
   "inline.bootstrap",
+  "inline.translate",
   "inline.generate",
   "inline.regenerate",
   "inline.history.sync",
@@ -68,7 +78,19 @@ export type ExtensionRequest =
   | { type: "data.getProviderAccess"; requestId: string }
   | { type: "data.revokeOrigins"; requestId: string }
   | { type: "data.reset"; requestId: string }
+  | { type: "translation.preferences.get"; requestId: string }
+  | {
+      type: "translation.preferences.save";
+      requestId: string;
+      preferences: TranslationPreferencesV1;
+    }
   | { type: "inline.bootstrap"; requestId: string }
+  | {
+      type: "inline.translate";
+      requestId: string;
+      input: TranslationInput;
+      force?: boolean;
+    }
   | { type: "inline.generate"; requestId: string; input: GenerationInput }
   | { type: "inline.regenerate"; requestId: string; input: RegenerationInput }
   | { type: "inline.history.sync"; requestId: string; historyId: string; result: GenerationResult }
@@ -83,6 +105,10 @@ export interface InlineBootstrap {
   styles: Array<{ id: string; label: string; version: number; isBuiltInDefault: boolean }>;
   defaultStyleId: string;
   preferences: CreationPreferencesV1["inline"];
+  translation: {
+    preferences: TranslationPreferencesV1;
+    configured: boolean;
+  };
 }
 
 export interface ExtensionError {
@@ -129,7 +155,10 @@ export interface ExtensionResponseMap {
   "data.getProviderAccess": GrantedProviderPermissionSummary;
   "data.revokeOrigins": ProviderPermissionSummary;
   "data.reset": { snapshot: SettingsSnapshot; remainingOriginCount: number };
+  "translation.preferences.get": TranslationPreferencesV1;
+  "translation.preferences.save": TranslationPreferencesV1;
   "inline.bootstrap": InlineBootstrap;
+  "inline.translate": TranslationResult;
   "inline.generate": { result: GenerationResult; historyId?: string };
   "inline.regenerate": RegenerationResult;
   "inline.history.sync": { synced: true };
@@ -156,6 +185,7 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
     value.type === "data.getProviderAccess" ||
     value.type === "data.revokeOrigins" ||
     value.type === "data.reset" ||
+    value.type === "translation.preferences.get" ||
     value.type === "inline.bootstrap"
   ) {
     return true;
@@ -174,6 +204,17 @@ export const isExtensionRequest = (value: unknown): value is ExtensionRequest =>
       isImageProviderProfile(value.profile) &&
       (value.apiKey === undefined ||
         (typeof value.apiKey === "string" && value.apiKey.length <= 2048))
+    );
+  }
+
+  if (value.type === "translation.preferences.save") {
+    return isTranslationPreferencesV1(value.preferences);
+  }
+
+  if (value.type === "inline.translate") {
+    return (
+      isTranslationInput(value.input) &&
+      (value.force === undefined || typeof value.force === "boolean")
     );
   }
 

@@ -3,6 +3,7 @@ import { POSTMUSE_MOUNT_ATTRIBUTE, X_SELECTORS } from "./x-adapter/selectors";
 export interface MountedXPost {
   article: HTMLElement;
   isConnected: () => boolean;
+  refresh?: () => void;
   close: (restoreFocus?: boolean) => void;
   destroy: () => void;
 }
@@ -14,15 +15,16 @@ type MountXPost = (
 
 const collectCandidatePosts = (root: Node): HTMLElement[] => {
   const posts = new Set<HTMLElement>();
-  if (root instanceof Element) {
-    const closest = root.closest<HTMLElement>(X_SELECTORS.post);
+  const rootElement = root instanceof Element ? root : root.parentElement;
+  if (rootElement) {
+    const closest = rootElement.closest<HTMLElement>(X_SELECTORS.post);
     if (closest) {
       posts.add(closest);
     }
-    if (root.matches(X_SELECTORS.post)) {
-      posts.add(root as HTMLElement);
+    if (rootElement.matches(X_SELECTORS.post)) {
+      posts.add(rootElement as HTMLElement);
     }
-    for (const post of root.querySelectorAll<HTMLElement>(X_SELECTORS.post)) {
+    for (const post of rootElement.querySelectorAll<HTMLElement>(X_SELECTORS.post)) {
       posts.add(post);
     }
   } else if (root instanceof Document || root instanceof DocumentFragment) {
@@ -56,7 +58,13 @@ export class XPostObserver {
       }
       this.scheduleFlush();
     });
-    this.observer.observe(root.documentElement, { childList: true, subtree: true });
+    this.observer.observe(root.documentElement, {
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["href", "lang"],
+      subtree: true,
+    });
   }
 
   stop(): void {
@@ -67,6 +75,11 @@ export class XPostObserver {
       mounted.destroy();
     }
     this.mounts.clear();
+    this.activeMount = undefined;
+  }
+
+  closeActive(restoreFocus = false): void {
+    this.activeMount?.close(restoreFocus);
     this.activeMount = undefined;
   }
 
@@ -100,11 +113,12 @@ export class XPostObserver {
 
   private scan(root: Node): void {
     for (const article of collectCandidatePosts(root)) {
-      if (
-        !article.isConnected ||
-        this.mounts.has(article) ||
-        article.hasAttribute(POSTMUSE_MOUNT_ATTRIBUTE)
-      ) {
+      const existing = this.mounts.get(article);
+      if (existing) {
+        existing.refresh?.();
+        continue;
+      }
+      if (!article.isConnected || article.hasAttribute(POSTMUSE_MOUNT_ATTRIBUTE)) {
         continue;
       }
       const mounted = this.mountPost(article, (opened) => {

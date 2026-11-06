@@ -5,8 +5,16 @@ All notable user-facing changes to PostMuse are documented here. Versions follow
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-07
+
 ### Added
 
+- One-click translation for the current visible X post, with target-language labels, cancellable
+  progress, copy, hide, and explicit retranslation actions.
+- A dedicated Translation panel for choosing one of 17 target languages and either below-original
+  or reversible visual-replacement display.
+- Session-only 100-entry translation cache keyed by source digest, target, Provider, model, and
+  translation recipe; translations are never added to History.
 - Successful standalone and companion images are automatically saved to local history when history
   is enabled, with local preview, download, deletion, and bounded IndexedDB storage.
 - Candidate, long-post, thread-item, raw fallback, and X inline candidate regeneration with
@@ -15,6 +23,10 @@ All notable user-facing changes to PostMuse are documented here. Versions follow
 
 ### Changed
 
+- Text Provider adapters now support both structured creation and lean plain-text translation;
+  translation omits writing styles, profiles, schemas, custom temperature, and automatic retries.
+- X virtual-list lifecycle handling now closes stale inline surfaces and restores hidden source text
+  when a post node is reused or translation preferences change.
 - Provider permission summaries and revocation now exclude the required X Content Script origin.
 - Packaged privacy disclosures now accurately describe optional local image history.
 
@@ -55,5 +67,6 @@ All notable user-facing changes to PostMuse are documented here. Versions follow
 - First public developer-mode beta with BYOK text generation, X inline drafting, prompt styles,
   local history, and initial OpenAI/Gemini image generation.
 
+[0.3.0]: https://github.com/calmlim/PostMuse/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/calmlim/PostMuse/compare/v0.1.0-beta.1...v0.2.0
 [0.1.0-beta.1]: https://github.com/calmlim/PostMuse/releases/tag/v0.1.0-beta.1

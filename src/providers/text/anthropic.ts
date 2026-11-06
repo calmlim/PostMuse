@@ -18,7 +18,7 @@ export const anthropicAdapter: TextProviderAdapter = {
         },
         body: JSON.stringify({
           model: profile.model,
-          max_tokens: profile.maxOutputTokens,
+          max_tokens: request.maxOutputTokens ?? profile.maxOutputTokens,
           system: request.system,
           messages: [{ role: "user", content: request.user }],
         }),

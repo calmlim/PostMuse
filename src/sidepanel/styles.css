@@ -2065,6 +2065,7 @@ textarea {
 .app-main,
 .app-main[data-view="create"],
 .app-main[data-view="settings"],
+.app-main[data-view="translate"],
 .app-main[data-view="prompts"],
 .app-main[data-view="history"] {
   padding: 28px 22px 42px;
@@ -2097,6 +2098,7 @@ textarea {
 
 .create-panel,
 .settings-panel,
+.translation-panel,
 .prompts-panel,
 .history-panel {
   max-width: 580px;

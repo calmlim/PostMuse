@@ -40,6 +40,12 @@ import { generateText } from "./text-generation";
 import { generateImage } from "./image-generation";
 import { regenerateText } from "./text-regeneration";
 import { resetPostMuseData } from "../storage/data-reset";
+import {
+  loadTranslationPreferences,
+  saveTranslationPreferences,
+} from "../storage/translation-preferences";
+import { isSameTranslationLanguage } from "../core/translation/request-builder";
+import { translateText } from "./translation";
 
 type AnyExtensionResponse = ExtensionResponse<ExtensionResponseMap[keyof ExtensionResponseMap]>;
 const activeGenerationRequests = new Map<string, AbortController>();
@@ -158,6 +164,42 @@ const runImageGeneration = async (
   }
 };
 
+const runTranslation = async (
+  requestId: string,
+  input: Extract<ExtensionRequest, { type: "inline.translate" }>["input"],
+  force = false,
+): Promise<AnyExtensionResponse> => {
+  if (activeGenerationRequests.has(requestId)) {
+    throw new AppError("INVALID_REQUEST", "A request with this id is already running.");
+  }
+  const controller = new AbortController();
+  activeGenerationRequests.set(requestId, controller);
+  try {
+    const settings = await loadSettings();
+    const preferences = await loadTranslationPreferences(settings.uiLocale);
+    const profile = getActiveProviderProfile(settings);
+    if (isSameTranslationLanguage(input.sourceLanguageHint, preferences.targetLanguage)) {
+      return {
+        ok: true,
+        data: await translateText(input, preferences, profile, undefined, controller.signal, force),
+      };
+    }
+    if (!(await hasProviderOriginPermission(profile.baseUrl))) {
+      throw new AppError(
+        "HOST_PERMISSION_REQUIRED",
+        "Allow access to the Provider host before translating.",
+      );
+    }
+    const apiKey = await readApiKey(createTextSecretBinding(profile), profile.keyPersistence);
+    return {
+      ok: true,
+      data: await translateText(input, preferences, profile, apiKey, controller.signal, force),
+    };
+  } finally {
+    activeGenerationRequests.delete(requestId);
+  }
+};
+
 const handleRequest = async (
   request: ExtensionRequest,
   sender: chrome.runtime.MessageSender,
@@ -172,6 +214,7 @@ const handleRequest = async (
       loadResolvedPromptLibrary(),
       loadCreationPreferences(),
     ]);
+    const translationPreferences = await loadTranslationPreferences(settings.uiLocale);
     const profile = getActiveProviderProfile(settings);
     const secretStatus = await getSecretStatus(createTextSecretBinding(profile));
     const styles = promptLibrary.active.map(({ id, label, version, source, isOverridden }) => ({
@@ -192,8 +235,21 @@ const handleRequest = async (
           ? creationPreferences.defaultStyleId
           : (styles[0]?.id ?? "professional"),
         preferences: creationPreferences.inline,
+        translation: {
+          preferences: translationPreferences,
+          configured: Boolean(profile.model.trim() && secretStatus.hasKey),
+        },
       },
     };
+  }
+
+  if (request.type === "translation.preferences.get") {
+    const settings = await loadSettings();
+    return { ok: true, data: await loadTranslationPreferences(settings.uiLocale) };
+  }
+
+  if (request.type === "translation.preferences.save") {
+    return { ok: true, data: await saveTranslationPreferences(request.preferences) };
   }
 
   if (request.type === "inline.openSidePanel") {
@@ -346,6 +402,10 @@ const handleRequest = async (
 
   if (request.type === "image.generate") {
     return runImageGeneration(request.requestId, request.input);
+  }
+
+  if (request.type === "inline.translate") {
+    return runTranslation(request.requestId, request.input, request.force);
   }
 
   const settings = await loadSettings();

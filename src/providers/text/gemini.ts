@@ -20,12 +20,17 @@ export const geminiAdapter: TextProviderAdapter = {
           input: request.user,
           system_instruction: request.system,
           store: false,
-          response_format: {
-            type: "text",
-            mime_type: "application/json",
-            schema: request.schema,
+          response_format:
+            request.outputMode === "structured"
+              ? {
+                  type: "text",
+                  mime_type: "application/json",
+                  schema: request.schema,
+                }
+              : { type: "text", mime_type: "text/plain" },
+          generation_config: {
+            max_output_tokens: request.maxOutputTokens ?? profile.maxOutputTokens,
           },
-          generation_config: { max_output_tokens: profile.maxOutputTokens },
         }),
       },
       signal,

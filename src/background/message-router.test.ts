@@ -192,6 +192,143 @@ describe("background message router", () => {
     ).resolves.toMatchObject({ ok: false, error: { code: "UNTRUSTED_SENDER" } });
   });
 
+  it("translates with the trusted local target and never exposes the API key", async () => {
+    const profile = {
+      ...createDefaultProviderProfile(),
+      model: "gpt-translation",
+      samplingMode: "custom" as const,
+      temperature: 1.2,
+    };
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "translation-settings",
+        profile,
+        apiKey: "sk-translation-secret",
+      },
+      trustedSender,
+    );
+    await routeExtensionMessage(
+      {
+        type: "translation.preferences.save",
+        requestId: "translation-preferences",
+        preferences: { schemaVersion: 1, targetLanguage: "fr", displayMode: "below" },
+      },
+      trustedSender,
+    );
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: "Bonjour\nle monde" } }] }), {
+        status: 200,
+      }),
+    );
+
+    const response = await routeExtensionMessage(
+      {
+        type: "inline.translate",
+        requestId: "translation-1",
+        input: {
+          text: "Hello\nworld",
+          sourceLanguageHint: "en-US",
+          targetLanguage: "de",
+        },
+      },
+      xContentSender,
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: {
+        status: "translated",
+        text: "Bonjour\nle monde",
+        targetLanguage: "fr",
+        cached: false,
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("sk-translation-secret");
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.messages[0].content).toContain("to French");
+    expect(body.messages[1].content).toBe(JSON.stringify("Hello\nworld"));
+    expect(body).not.toHaveProperty("response_format");
+    expect(body).not.toHaveProperty("temperature");
+    expect(JSON.stringify(body)).not.toMatch(/writing profile|candidate|schema/i);
+    expect(await listHistoryRecords()).toEqual([]);
+  });
+
+  it("skips Provider permission and key access for a reliable same-language hint", async () => {
+    permissionContains.mockResolvedValue(false);
+
+    const response = await routeExtensionMessage(
+      {
+        type: "inline.translate",
+        requestId: "translation-same-language",
+        input: { text: "Already English", sourceLanguageHint: "en-US" },
+      },
+      xContentSender,
+    );
+
+    expect(response).toEqual({
+      ok: true,
+      data: { status: "same-language", targetLanguage: "en" },
+    });
+    expect(permissionContains).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("cancels an active inline translation", async () => {
+    const profile = { ...createDefaultProviderProfile(), model: "gpt-translation" };
+    await routeExtensionMessage(
+      {
+        type: "settings.saveProfile",
+        requestId: "translation-cancel-settings",
+        profile,
+        apiKey: "sk-translation-cancel",
+      },
+      trustedSender,
+    );
+    await routeExtensionMessage(
+      {
+        type: "translation.preferences.save",
+        requestId: "translation-cancel-preferences",
+        preferences: { schemaVersion: 1, targetLanguage: "fr", displayMode: "below" },
+      },
+      trustedSender,
+    );
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    );
+
+    const pendingTranslation = routeExtensionMessage(
+      {
+        type: "inline.translate",
+        requestId: "translation-to-cancel",
+        input: { text: "Translate this", sourceLanguageHint: "en" },
+      },
+      xContentSender,
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await expect(
+      routeExtensionMessage(
+        {
+          type: "inline.cancel",
+          requestId: "cancel-translation",
+          targetRequestId: "translation-to-cancel",
+        },
+        xContentSender,
+      ),
+    ).resolves.toEqual({ ok: true, data: { cancelled: true } });
+    await expect(pendingTranslation).resolves.toMatchObject({
+      ok: false,
+      error: { code: "REQUEST_CANCELLED" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("requires exact host permission before the live setup test", async () => {
     const profile = { ...createDefaultProviderProfile(), model: "gpt-5-mini" };
     await routeExtensionMessage(

@@ -14,6 +14,8 @@ a companion image without giving PostMuse access to an account or publishing aut
 
 - Compose posts, replies, quotes, threads, and Premium long posts.
 - Rewrite a user-selected visible X post from a compact inline panel.
+- Translate the current visible X post on demand into one of 17 languages, below the original or
+  as a reversible visual replacement.
 - Choose output language, writing style, length, intent, audience, goal, tone, and advanced rules.
 - Manage built-in and custom prompt styles plus an optional writing profile.
 - Generate editable text candidates through OpenAI-compatible, Anthropic, Gemini, or xAI APIs.
@@ -75,6 +77,8 @@ amount.
   persistently when the user chooses that option.
 - Drafts, selected visible X content, prompts, and generated media are sent directly from the
   extension to the Provider chosen by the user, and only after an explicit action.
+- Translations use the configured text Provider and are cached only for the current browser session;
+  the cache stores a source digest rather than the original post and never enters local History.
 - Local history uses IndexedDB and can be disabled, cleared, or deleted record by record.
 - When local history is enabled, generated images and their metadata are stored only in IndexedDB
   in this browser so they can be previewed and downloaded again. Disabling history stops new saves;
@@ -92,8 +96,9 @@ permission disclosures.
 ## X integration notice
 
 The optional X experience injects a small Content Script into `https://x.com/*`. It observes page
-structure to place a PostMuse button and reads only the visible post selected by the user when that
-button is clicked. It does not bulk-scroll, scrape accounts, fill a composer, or publish.
+structure to place PostMuse writing and translation controls and reads only the visible post selected
+by the user when one of those controls is clicked. It does not bulk-scroll, scrape accounts, fill a
+composer, or publish.
 
 X's current terms prohibit unauthorized scraping and non-API website automation. Installing this
 software manually does not grant permission from X or guarantee that the integration complies with

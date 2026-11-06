@@ -1,4 +1,10 @@
-import { ClockCounterClockwise, GearSix, MagicWand, PencilSimple } from "@phosphor-icons/react";
+import {
+  ClockCounterClockwise,
+  GearSix,
+  GlobeHemisphereWest,
+  MagicWand,
+  PencilSimple,
+} from "@phosphor-icons/react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { BrandMark } from "../components/BrandMark";
 import { createRequestId } from "../core/contracts/messages";
@@ -18,12 +24,18 @@ const PromptsPanel = lazy(() =>
 const SettingsPanel = lazy(() =>
   import("./SettingsPanel").then((module) => ({ default: module.SettingsPanel })),
 );
+const TranslationPanel = lazy(() =>
+  import("./TranslationPanel").then((module) => ({ default: module.TranslationPanel })),
+);
 
 export function App() {
   const [locale, setLocale] = useState<Locale>(detectPreferredLocale());
-  const [view, setView] = useState<"create" | "history" | "prompts" | "settings">("create");
+  const [view, setView] = useState<"create" | "history" | "prompts" | "translate" | "settings">(
+    "create",
+  );
   const [visitedPersistentViews, setVisitedPersistentViews] = useState({
     prompts: false,
+    translate: false,
     settings: false,
   });
   const [settingsRevision, setSettingsRevision] = useState(0);
@@ -91,7 +103,7 @@ export function App() {
 
   const selectView = (nextView: typeof view) => {
     setView(nextView);
-    if (nextView === "prompts" || nextView === "settings") {
+    if (nextView === "prompts" || nextView === "translate" || nextView === "settings") {
       setVisitedPersistentViews((visited) => ({ ...visited, [nextView]: true }));
     }
   };
@@ -192,6 +204,15 @@ export function App() {
               />
             </div>
           ) : null}
+          {visitedPersistentViews.translate ? (
+            <div hidden={view !== "translate"}>
+              <TranslationPanel
+                key={`${dataRevision}-${settingsRevision}`}
+                copy={copy}
+                onOpenSettings={() => selectView("settings")}
+              />
+            </div>
+          ) : null}
         </Suspense>
       </main>
 
@@ -215,6 +236,14 @@ export function App() {
         >
           <MagicWand size={18} weight={view === "prompts" ? "fill" : "regular"} />
           <span>{copy.promptsNav}</span>
+        </button>
+        <button
+          type="button"
+          data-active={view === "translate"}
+          onClick={() => selectView("translate")}
+        >
+          <GlobeHemisphereWest size={18} weight={view === "translate" ? "fill" : "regular"} />
+          <span>{copy.translateNav}</span>
         </button>
         <button
           type="button"

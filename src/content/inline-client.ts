@@ -4,9 +4,11 @@ import {
   type ExtensionResponseMap,
 } from "../core/contracts/messages";
 import type { GenerationInput, RegenerationInput } from "../core/generation/types";
+import type { TranslationInput } from "../core/translation/types";
 
 type InlineRequestInput =
   | { type: "inline.bootstrap" }
+  | { type: "inline.translate"; input: TranslationInput; force?: boolean }
   | { type: "inline.generate"; input: GenerationInput }
   | { type: "inline.regenerate"; input: RegenerationInput }
   | {

@@ -34,6 +34,9 @@ describe("prompt builder", () => {
     expect(request.system).toContain("Must include: one concrete example");
     expect(request.system).toContain("Must avoid: hype");
     expect(request.system).toContain("exactly 2 candidates");
+    if (request.outputMode !== "structured") {
+      throw new Error("Expected structured output.");
+    }
     expect(request.schemaName).toBe("post_candidates");
   });
 
@@ -126,6 +129,9 @@ describe("prompt builder", () => {
       }),
     );
 
+    if (request.outputMode !== "structured") {
+      throw new Error("Expected structured output.");
+    }
     expect(request.schemaName).toBe("thread");
     expect(request.system).toContain("exactly 5 string posts");
   });

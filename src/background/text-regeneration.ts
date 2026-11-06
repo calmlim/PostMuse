@@ -88,6 +88,7 @@ export const regenerateText = async (
           : "middle development post"
       : "candidate";
   const normalized: NormalizedTextRequest = {
+    outputMode: "structured",
     schemaName: "target_regeneration",
     schema: replacementSchema,
     system: [

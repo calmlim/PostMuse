@@ -1,9 +1,10 @@
 import { act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MountedXPost } from "../observer";
-import { mountInlinePost } from "./inject-trigger";
+import { mountInlinePost, refreshInlineConfiguration } from "./inject-trigger";
 
 const runtimeSendMessage = vi.fn();
+let translationDisplayMode: "below" | "replace";
 
 const createPost = (text: string): HTMLElement => {
   const article = document.createElement("article");
@@ -18,23 +19,51 @@ const createPost = (text: string): HTMLElement => {
 };
 
 beforeEach(() => {
-  runtimeSendMessage.mockResolvedValue({
+  translationDisplayMode = "replace";
+  runtimeSendMessage.mockImplementation(async (message: { type: string }) => ({
     ok: true,
-    data: {
-      locale: "en",
-      configured: false,
-      providerDisplayName: "OpenAI-compatible",
-      model: "",
-      styles: [
-        {
-          id: "professional",
-          label: "Professional",
-          version: 1,
-          isBuiltInDefault: true,
-        },
-      ],
-    },
-  });
+    data:
+      message.type === "inline.translate"
+        ? {
+            status: "translated",
+            text: "翻译结果",
+            targetLanguage: "zh-CN",
+            provider: "openai-compatible",
+            model: "test-model",
+            cached: false,
+            outputLimitMayBeLow: false,
+          }
+        : {
+            locale: "en",
+            configured: true,
+            providerDisplayName: "OpenAI-compatible",
+            model: "test-model",
+            styles: [
+              {
+                id: "professional",
+                label: "Professional",
+                version: 1,
+                isBuiltInDefault: true,
+              },
+            ],
+            defaultStyleId: "professional",
+            preferences: {
+              language: "follow-source",
+              length: "medium",
+              candidateCount: 2,
+              replyIntent: "agree-and-add",
+              quoteIntent: "comment",
+            },
+            translation: {
+              configured: true,
+              preferences: {
+                schemaVersion: 1,
+                targetLanguage: "zh-CN",
+                displayMode: translationDisplayMode,
+              },
+            },
+          },
+  }));
   vi.stubGlobal("chrome", { runtime: { sendMessage: runtimeSendMessage } });
 });
 
@@ -177,5 +206,96 @@ describe("inline X mount", () => {
       ),
     ).toHaveAttribute("aria-pressed", "true");
     await act(async () => detail.mounted?.destroy());
+  });
+
+  it("translates only after a click and restores visually replaced source text", async () => {
+    const article = createPost("Hello\nworld");
+    const text = article.querySelector<HTMLElement>('[data-testid="tweetText"]');
+    let mounted: MountedXPost | undefined;
+    await act(async () => {
+      mounted = mountInlinePost(article, vi.fn());
+    });
+    expect(
+      runtimeSendMessage.mock.calls.some(([message]) => message.type === "inline.translate"),
+    ).toBe(false);
+
+    const trigger = article.querySelector<HTMLElement>(
+      '[data-postmuse-host="translation-trigger"]',
+    );
+    expect(trigger?.shadowRoot?.querySelector("button")?.getAttribute("aria-label")).toContain(
+      "简体中文",
+    );
+    await act(async () => {
+      trigger?.shadowRoot?.querySelector<HTMLButtonElement>("button")?.click();
+    });
+    await act(async () => Promise.resolve());
+
+    expect(
+      runtimeSendMessage.mock.calls.some(([message]) => message.type === "inline.translate"),
+    ).toBe(true);
+    expect(text?.style.display).toBe("none");
+    const translation = article.querySelector<HTMLElement>(
+      '[data-postmuse-host="translation-panel"]',
+    );
+    expect(translation?.shadowRoot?.textContent).toContain("翻译结果");
+
+    await act(async () => mounted?.close(false));
+    expect(text?.style.display).toBe("");
+    expect(text?.hasAttribute("aria-hidden")).toBe(false);
+    await act(async () => mounted?.destroy());
+  });
+
+  it("keeps the original visible in below mode", async () => {
+    translationDisplayMode = "below";
+    await act(async () => refreshInlineConfiguration());
+    const article = createPost("Hello world");
+    const text = article.querySelector<HTMLElement>('[data-testid="tweetText"]');
+    let mounted: MountedXPost | undefined;
+    await act(async () => {
+      mounted = mountInlinePost(article, vi.fn());
+    });
+    const trigger = article.querySelector<HTMLElement>(
+      '[data-postmuse-host="translation-trigger"]',
+    );
+    await act(async () => {
+      trigger?.shadowRoot?.querySelector<HTMLButtonElement>("button")?.click();
+    });
+    await act(async () => Promise.resolve());
+
+    expect(text?.style.display).toBe("");
+    expect(text?.hasAttribute("aria-hidden")).toBe(false);
+    await act(async () => mounted?.destroy());
+  });
+
+  it("clears a replaced translation and restores the source when an article is reused", async () => {
+    translationDisplayMode = "replace";
+    await act(async () => refreshInlineConfiguration());
+    const article = createPost("First post");
+    const text = article.querySelector<HTMLElement>('[data-testid="tweetText"]');
+    let mounted: MountedXPost | undefined;
+    await act(async () => {
+      mounted = mountInlinePost(article, vi.fn());
+    });
+    const trigger = article.querySelector<HTMLElement>(
+      '[data-postmuse-host="translation-trigger"]',
+    );
+    await act(async () => {
+      trigger?.shadowRoot?.querySelector<HTMLButtonElement>("button")?.click();
+    });
+    await act(async () => Promise.resolve());
+    expect(text?.style.display).toBe("none");
+
+    if (text) {
+      text.textContent = "Reused post";
+    }
+    await act(async () => mounted?.refresh?.());
+
+    expect(text?.style.display).toBe("");
+    expect(text?.hasAttribute("aria-hidden")).toBe(false);
+    const translation = article.querySelector<HTMLElement>(
+      '[data-postmuse-host="translation-panel"]',
+    );
+    expect(translation?.shadowRoot?.textContent).not.toContain("翻译结果");
+    await act(async () => mounted?.destroy());
   });
 });

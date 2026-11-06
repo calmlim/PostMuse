@@ -17,12 +17,12 @@ export const openAICompatibleAdapter: TextProviderAdapter = {
         { role: "user", content: request.user },
       ],
       [officialOpenAI && !legacyOfficialModel ? "max_completion_tokens" : "max_tokens"]:
-        profile.maxOutputTokens,
+        request.maxOutputTokens ?? profile.maxOutputTokens,
     };
-    if (profile.samplingMode === "custom") {
+    if (profile.samplingMode === "custom" && !request.suppressCustomSampling) {
       body.temperature = profile.temperature;
     }
-    if (officialOpenAI && !legacyOfficialModel) {
+    if (request.outputMode === "structured" && officialOpenAI && !legacyOfficialModel) {
       body.response_format = {
         type: "json_schema",
         json_schema: { name: request.schemaName, strict: true, schema: request.schema },

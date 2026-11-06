@@ -9,16 +9,17 @@ import { openAICompatibleAdapter } from "./openai-compatible";
 import type { TextProviderAdapter } from "./types";
 import { xAIAdapter } from "./xai";
 
-const request: NormalizedTextRequest = {
+const request = {
   system: "Return JSON.",
   user: "Source text.",
+  outputMode: "structured",
   schemaName: "post_candidates",
   schema: {
     type: "object",
     properties: { candidates: { type: "array" } },
     required: ["candidates"],
   },
-};
+} satisfies NormalizedTextRequest;
 
 const fetchMock = vi.fn();
 
@@ -212,6 +213,70 @@ describe("text provider adapters", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
       temperature: 0.4,
     });
+  });
+
+  it("uses lean plain-text requests for translation across all adapters", async () => {
+    const translationRequest = {
+      system: "Translate to French. Output only the translation.",
+      user: JSON.stringify("Hello"),
+      outputMode: "plain-text",
+      maxOutputTokens: 96,
+      suppressCustomSampling: true,
+    } satisfies NormalizedTextRequest;
+    const context = (provider: ProviderId) => ({
+      profile: {
+        ...profileFor(provider),
+        samplingMode: "custom" as const,
+        temperature: 1.2,
+      },
+      apiKey: "test-secret-value",
+      signal: new AbortController().signal,
+      purpose: "translation" as const,
+    });
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ choices: [{ message: { content: "Bonjour" } }] }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "Bonjour" }] }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            status: "completed",
+            steps: [{ type: "model_output", content: [{ type: "text", text: "Bonjour" }] }],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ choices: [{ message: { content: "Bonjour" } }] }), {
+          status: 200,
+        }),
+      );
+
+    await openAICompatibleAdapter.generate(translationRequest, context("openai-compatible"));
+    await anthropicAdapter.generate(translationRequest, context("anthropic"));
+    await geminiAdapter.generate(translationRequest, context("gemini"));
+    await xAIAdapter.generate(translationRequest, context("xai"));
+
+    const bodies = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)));
+    expect(bodies[0]).toMatchObject({ max_completion_tokens: 96 });
+    expect(bodies[0]).not.toHaveProperty("response_format");
+    expect(bodies[0]).not.toHaveProperty("temperature");
+    expect(bodies[1]).toMatchObject({ max_tokens: 96 });
+    expect(bodies[2].response_format).toEqual({ type: "text", mime_type: "text/plain" });
+    expect(bodies[2].response_format).not.toHaveProperty("schema");
+    expect(bodies[2].generation_config).toEqual({ max_output_tokens: 96 });
+    expect(bodies[3]).toMatchObject({ max_tokens: 96 });
+    expect(bodies[3]).not.toHaveProperty("response_format");
+    expect(bodies[3]).not.toHaveProperty("temperature");
   });
 
   it("maps Provider safety refusals to a stable application error", async () => {

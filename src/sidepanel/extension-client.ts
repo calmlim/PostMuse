@@ -10,6 +10,7 @@ import type { RegenerationInput } from "../core/generation/types";
 import type { ImageGenerationInput } from "../core/image/types";
 import type { ImageProviderProfile } from "../core/settings/types";
 import { supportsInsecureLocalhost } from "../core/settings/runtime-capabilities";
+import type { TranslationPreferencesV1 } from "../core/translation/types";
 
 type ExtensionRequestInput =
   | { type: "settings.get" }
@@ -24,7 +25,9 @@ type ExtensionRequestInput =
   | { type: "data.deleteKeys" }
   | { type: "data.getProviderAccess" }
   | { type: "data.revokeOrigins" }
-  | { type: "data.reset" };
+  | { type: "data.reset" }
+  | { type: "translation.preferences.get" }
+  | { type: "translation.preferences.save"; preferences: TranslationPreferencesV1 };
 
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "settings.get" }>,
@@ -71,6 +74,12 @@ export function sendExtensionRequest(
 export function sendExtensionRequest(
   request: Extract<ExtensionRequestInput, { type: "data.reset" }>,
 ): Promise<ExtensionResponseMap["data.reset"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "translation.preferences.get" }>,
+): Promise<ExtensionResponseMap["translation.preferences.get"]>;
+export function sendExtensionRequest(
+  request: Extract<ExtensionRequestInput, { type: "translation.preferences.save" }>,
+): Promise<ExtensionResponseMap["translation.preferences.save"]>;
 export async function sendExtensionRequest(
   request: ExtensionRequestInput,
   options: { requestId?: string } = {},

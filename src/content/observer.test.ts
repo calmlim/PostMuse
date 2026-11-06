@@ -60,4 +60,34 @@ describe("XPostObserver", () => {
     expect(destroy).toHaveBeenCalledTimes(1);
     observer.stop();
   });
+
+  it("refreshes a mounted post when virtual-list text or status links change", async () => {
+    const refresh = vi.fn();
+    const mountPost = vi.fn((article: HTMLElement) => ({
+      article,
+      isConnected: () => article.isConnected,
+      refresh,
+      close: vi.fn(),
+      destroy: vi.fn(),
+    }));
+    document.body.innerHTML = postMarkup(1);
+    const article = document.querySelector<HTMLElement>('article[data-testid="tweet"]');
+    article?.insertAdjacentHTML("afterbegin", '<a href="/user/status/1">time</a>');
+    const observer = new XPostObserver(mountPost);
+    observer.start();
+
+    const textNode = article?.querySelector('[data-testid="tweetText"]')?.firstChild;
+    if (!textNode) {
+      throw new Error("Expected a post text node.");
+    }
+    textNode.nodeValue = "Reused post";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(refresh).toHaveBeenCalled();
+
+    refresh.mockClear();
+    article?.querySelector("a")?.setAttribute("href", "/user/status/2");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(refresh).toHaveBeenCalled();
+    observer.stop();
+  });
 });

@@ -13,13 +13,15 @@ export const xAIAdapter: TextProviderAdapter = {
         { role: "system", content: request.system },
         { role: "user", content: request.user },
       ],
-      max_tokens: profile.maxOutputTokens,
-      response_format: {
+      max_tokens: request.maxOutputTokens ?? profile.maxOutputTokens,
+    };
+    if (request.outputMode === "structured") {
+      body.response_format = {
         type: "json_schema",
         json_schema: { name: request.schemaName, strict: true, schema: request.schema },
-      },
-    };
-    if (profile.samplingMode === "custom") {
+      };
+    }
+    if (profile.samplingMode === "custom" && !request.suppressCustomSampling) {
       body.temperature = profile.temperature;
     }
     const payload = await fetchJsonWithPolicy(

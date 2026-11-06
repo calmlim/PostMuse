@@ -5,12 +5,27 @@ import {
 } from "../settings/defaults";
 import { createGenerationInputFixture } from "../generation/fixtures";
 import { isExtensionRequest } from "./messages";
+import { createDefaultTranslationPreferences } from "../translation/preferences";
 
 describe("extension message validation", () => {
   it("accepts known typed envelopes", () => {
     expect(isExtensionRequest({ type: "settings.get", requestId: "request-1" })).toBe(true);
     expect(isExtensionRequest({ type: "data.deleteKeys", requestId: "request-data-1" })).toBe(true);
     expect(isExtensionRequest({ type: "data.reset", requestId: "request-data-2" })).toBe(true);
+    expect(
+      isExtensionRequest({
+        type: "translation.preferences.save",
+        requestId: "request-translation-settings",
+        preferences: createDefaultTranslationPreferences(),
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionRequest({
+        type: "inline.translate",
+        requestId: "request-translation",
+        input: { text: "Translate this", sourceLanguageHint: "en" },
+      }),
+    ).toBe(true);
     expect(
       isExtensionRequest({
         type: "settings.saveProfile",
@@ -68,6 +83,13 @@ describe("extension message validation", () => {
         requestId: "request-2",
         profile: createDefaultProviderProfile(),
         apiKey: "x".repeat(2049),
+      }),
+    ).toBe(false);
+    expect(
+      isExtensionRequest({
+        type: "inline.translate",
+        requestId: "request-translation",
+        input: { text: "x".repeat(25_001) },
       }),
     ).toBe(false);
     expect(

@@ -5,7 +5,7 @@ export interface TextProviderContext {
   profile: ProviderProfile;
   apiKey: string;
   signal: AbortSignal;
-  purpose: "generation" | "connection-test";
+  purpose: "generation" | "connection-test" | "translation";
 }
 
 export const getTextRequestTimeout = (purpose: TextProviderContext["purpose"]): number =>

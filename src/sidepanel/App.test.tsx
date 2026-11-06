@@ -33,6 +33,17 @@ beforeEach(() => {
 
   const defaultSettings = createDefaultSettings();
   runtimeSendMessage.mockImplementation(async (request: { type: string; profile?: object }) => {
+    if (request.type === "translation.preferences.get") {
+      return {
+        ok: true,
+        data: { schemaVersion: 1, targetLanguage: "en", displayMode: "below" },
+      };
+    }
+
+    if (request.type === "translation.preferences.save") {
+      return { ok: true, data: (request as { preferences?: object }).preferences };
+    }
+
     if (request.type === "settings.get") {
       return {
         ok: true,
@@ -78,6 +89,7 @@ beforeEach(() => {
     },
     runtime: { sendMessage: runtimeSendMessage },
     permissions: { request: permissionsRequest },
+    tabs: { query: vi.fn().mockResolvedValue([]), sendMessage: vi.fn() },
   });
 });
 
@@ -88,6 +100,31 @@ describe("Side Panel App", () => {
     expect(screen.getByRole("heading", { name: "Create" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: "Interface language" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Prompts" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Translate" })).toBeVisible();
+  });
+
+  it("configures a target language and reversible translation display mode", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Translate" }));
+
+    expect(await screen.findByRole("heading", { name: "Translate posts your way" })).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Translate to"), { target: { value: "zh-CN" } });
+    fireEvent.click(screen.getByRole("radio", { name: /Replace visually/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save translation settings" }));
+
+    await waitFor(() =>
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "translation.preferences.save",
+          preferences: {
+            schemaVersion: 1,
+            targetLanguage: "zh-CN",
+            displayMode: "replace",
+          },
+        }),
+      ),
+    );
+    expect(await screen.findByText("Translation settings saved.")).toBeVisible();
   });
 
   it("opens standalone image creation without a text draft", async () => {

@@ -1,13 +1,3 @@
-import {
-  ArrowsClockwise,
-  Copy,
-  GearSix,
-  SidebarSimple,
-  Sparkle,
-  StopCircle,
-  WarningCircle,
-  X,
-} from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BrandMark } from "../../components/BrandMark";
 import { createRequestId, type InlineBootstrap } from "../../core/contracts/messages";
@@ -17,6 +7,7 @@ import { OUTPUT_LANGUAGE_OPTIONS, type OutputLanguageId } from "../../core/gener
 import { getInlineMessages, type InlineMessages } from "../../i18n/inline";
 import { sendInlineRequest } from "../inline-client";
 import type { XPostContext } from "../x-adapter/types";
+import { InlineIcon } from "./InlineIcon";
 
 interface InlinePanelProps {
   context?: XPostContext;
@@ -394,17 +385,17 @@ export function InlinePanel({
               aria-label={copy.inlineOpenSidePanel}
               onClick={openSidePanel}
             >
-              <SidebarSimple size={18} weight="bold" aria-hidden="true" />
+              <InlineIcon name="sidebar" size={18} />
             </button>
             <button type="button" className="icon" aria-label={copy.inlineClose} onClick={onClose}>
-              <X size={17} weight="bold" aria-hidden="true" />
+              <InlineIcon name="x" size={17} />
             </button>
           </div>
         </div>
 
         {extractionFailed || !context ? (
           <div className="error" role="alert">
-            <WarningCircle size={17} weight="fill" aria-hidden="true" />
+            <InlineIcon name="warning" size={17} />
             {copy.inlineExtractionError}
           </div>
         ) : (
@@ -474,7 +465,7 @@ export function InlinePanel({
 
             {!bootstrap?.configured ? (
               <div className="notice">
-                <GearSix size={17} aria-hidden="true" />
+                <InlineIcon name="gear" size={17} />
                 <div>
                   <strong>{copy.inlineSetupTitle}</strong>
                   <small>{copy.inlineSetupBody}</small>
@@ -486,7 +477,7 @@ export function InlinePanel({
 
         {error ? (
           <div className="error" role="alert">
-            <WarningCircle size={17} weight="fill" aria-hidden="true" />
+            <InlineIcon name="warning" size={17} />
             {error}
           </div>
         ) : null}
@@ -495,13 +486,13 @@ export function InlinePanel({
           <div className="actions">
             {isGenerating ? (
               <button type="button" className="secondary" onClick={cancel}>
-                <StopCircle size={15} aria-hidden="true" />
+                <InlineIcon name="stop" size={15} />
                 {copy.inlineCancel}
               </button>
             ) : null}
             {!extractionFailed && bootstrap?.configured ? (
               <button type="button" className="primary" disabled={isGenerating} onClick={generate}>
-                <Sparkle size={15} weight="fill" aria-hidden="true" />
+                <InlineIcon name="sparkle" size={15} />
                 {isGenerating ? copy.inlineGenerating : copy.inlineGenerate}
               </button>
             ) : null}
@@ -524,9 +515,9 @@ export function InlinePanel({
                       disabled={isGenerating && regeneratingIndex !== index}
                     >
                       {regeneratingIndex === index ? (
-                        <StopCircle size={14} aria-hidden="true" />
+                        <InlineIcon name="stop" size={14} />
                       ) : (
-                        <ArrowsClockwise size={14} aria-hidden="true" />
+                        <InlineIcon name="arrows-clockwise" size={14} />
                       )}
                       {regeneratingIndex === index ? copy.inlineCancel : copy.regenerateItem}
                     </button>
@@ -535,7 +526,7 @@ export function InlinePanel({
                       className="secondary result-copy"
                       onClick={() => copyText(item.text)}
                     >
-                      <Copy size={14} aria-hidden="true" />
+                      <InlineIcon name="copy" size={14} />
                       {copy.copyText}
                     </button>
                   </span>
